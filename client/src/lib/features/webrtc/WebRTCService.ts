@@ -45,14 +45,13 @@ export class WebRTCService {
 
     switch (message.type) {
       case "init":
+        // The client learns its own ID and waits for others to call.
         this.myId = message.payload.selfId;
         console.log(`[WebRTC] Initialized with ID: ${this.myId}`);
-        for (const peerId of message.payload.peerIds) {
-          this.createAndSendOffer(peerId);
-        }
         break;
 
       case "user-joined":
+        // An existing client is told a new user has joined, so it sends an offer.
         console.log(
           `[WebRTC] User ${message.payload.peerId} joined. Sending offer.`
         );
@@ -60,6 +59,7 @@ export class WebRTCService {
         break;
 
       case "offer":
+        // A new client receives an offer from an existing client.
         console.log(`[WebRTC] Received offer from ${message.senderId}`);
         await this.handleOffer(message.senderId, message.payload.sdp);
         break;
