@@ -1,0 +1,58 @@
+{
+  "compilerOptions": {
+    // --- Target and Libraries ---
+    "target": "ES2022",
+    "lib": ["es2022"],
+    "useDefineForClassFields": true,
+
+    // --- Modules ---
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "resolveJsonModule": true,
+
+    // --- Emit ---
+    "outDir": "dist",
+    "removeComments": true,
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    "incremental": true,
+
+    // --- Interoperability ---
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // --- Strictness & Code Quality ---
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+
+    // --- Advanced & Build Optimizations ---
+    "skipLibCheck": true,
+    "isolatedModules": true,
+
+    // --- CORRECT PATH ALIASES SETUP ---
+    // "rootDir": "src",
+    "baseUrl": "src",
+    "paths": {
+      "@/*": ["*"],
+      "@/prisma-client": ["../prisma/generated/prisma"]
+    },
+
+    // --- Type Acquisition ---
+    "typeRoots": ["./node_modules/@types", "./src/types"]
+  },
+  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "tests",
+    "**/*.spec.ts",
+    "**/*.test.ts"
+  ]
+}

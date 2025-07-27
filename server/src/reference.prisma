@@ -1,0 +1,456 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+// ===============================================
+// ===      USER & AUTHENTICATION MODELS       ===
+// ===============================================
+
+model User {
+  id             String    @id @default(uuid())
+  name           String
+  username       String    @unique
+  email          String    @unique
+  hashedPassword String?
+  bio            String?
+  title          String?
+  location       String?
+  profileImage   String?   @default("https://res.cloudinary.com/djtww0vax/image/upload/v1747766773/xi-biooid_bstapi.jpg")
+  bannerImage    String?   @default("https://res.cloudinary.com/djtww0vax/image/upload/v1747766773/xi-biooid_bstapi.jpg")
+  joinedAt       DateTime  @default(now()) @map("joined_at")
+  updatedAt      DateTime  @updatedAt
+
+  // --- Deactivation / Soft Delete ---
+  status        UserStatus @default(ACTIVE)
+  systemRole SystemRole @default(USER)
+  deactivatedAt DateTime?
+
+  // --- Social links ---
+  twitterUrl  String?
+  githubUrl   String?
+  linkedinUrl String?
+  websiteUrl  String?
+
+  // --- Relationships ---
+  posts                 Post[]
+  comments              Comment[]
+  commentReactions      CommentUserReaction[]
+  likedPosts            PostLike[]
+  savedPosts            PostSave[]
+  initiatedShares       PostShare[]
+  postViews             PostView[]
+  settings              UserSettings?
+  visitorSessions       VisitorSession[]
+  updates               Update[]
+  refreshTokens         RefreshToken[]
+  notificationsReceived Notification[]        @relation("Recipient")
+  notificationsSent     Notification[]        @relation("Sender")
+  followers             Follow[]              @relation("Following")
+  following             Follow[]              @relation("Follower")
+
+  @@map("users")
+}
+model RefreshToken {
+  id        String   @id @default(uuid())
+  jti       String   @unique // The JWT ID
+  userId    String
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // --- MODIFIED: Relation enabled for data integrity and easier querying.
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model UserSettings {
+  id                   String          @id @default(uuid())
+  theme                ThemePreference @default(SYSTEM)
+  notificationsEnabled Boolean         @default(true)
+  emailMarketing       Boolean         @default(false)
+  emailSocial          Boolean         @default(true)
+  updatedAt            DateTime        @updatedAt
+  userId               String          @unique
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+model Follow {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@map("follows")
+}
+
+
+// ===============================================
+// ===       CONTENT & POST MODELS             ===
+// ===============================================
+
+model Post {
+  id           String       @id @default(uuid())
+  title        String
+  description  String
+  content      String
+  category     PostCategory
+  isQuestion   Boolean      @default(false)
+  isResolved   Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+  externalLink String?
+  githubLink  String?
+
+  // --- Stats (Denormalized for performance) ---
+  upvotesCount  Int @default(0) @map("upvotes_count")
+  likesCount    Int @default(0) @map("likes_count")
+  viewsCount    Int @default(0) @map("views_count")
+  savedCount    Int @default(0) @map("saved_count")
+  sharesCount   Int @default(0) @map("shares_count")
+  commentsCount Int @default(0) @map("comments_count")
+
+  // --- Relationships ---
+  authorId       String
+  author         User            @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  comments       Comment[]
+  likedBy        PostLike[]
+  savedBy        PostSave[]
+  sharedBy       PostShare[]
+  viewedBy       PostView[]
+  tags           PostTag[]
+  images         PostImage[]
+  notifications  Notification[]
+  steps          GuideStep[]
+
+
+  @@index([authorId])
+  @@index([category, createdAt(sort: Desc)])
+  @@map("posts")
+}
+model GuideStep {
+  id          String   @id @default(uuid())
+  title       String   // e.g., "Part 1: Setting Up Your Environment"
+  description String?  @db.Text
+  order       Int      // The order of this step within the guide
+
+  // Relation to the parent Post
+  postId      String
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  // A Step has many Sections
+  sections    GuideSection[]
+
+  @@index([postId, order])
+  @@map("guide_steps")
+}
+
+
+model GuideSection {
+  id            String   @id @default(uuid())
+  title         String?  // Optional title for a specific piece of content
+  content       String   @db.Text
+  videoUrl      String?
+  imageUrl      String?
+  imagePublicId String?
+  order         Int      // The order of this section within the step
+
+  // Relation to the parent GuideStep
+  stepId        String
+  step          GuideStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  @@index([stepId, order])
+  @@map("guide_sections")
+}
+
+
+model PostImage {
+  id      String  @id @default(uuid())
+  url     String
+  // --- ADDED: Store the Cloudinary public_id for reliable deletion ---
+  publicId String
+  altText String?
+  order   Int
+
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@map("post_images")
+}
+
+
+model Tag {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+
+  // --- Relationships ---
+  posts         PostTag[]
+
+  @@map("tags")
+}
+
+model PostTag {
+  postId String
+  tagId  String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+  @@map("post_tags")
+}
+
+
+
+
+model Update {
+  id          String         @id @default(uuid())
+  version     String?
+  title       String
+  category    UpdateCategory
+  content     String
+  publishedAt DateTime       @default(now())
+  authorId    String
+  author      User           @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([authorId])
+  @@map("updates")
+}
+
+
+
+
+// ===============================================
+// ===    INTERACTION & ENGAGEMENT MODELS      ===
+// ===============================================
+
+model Comment {
+  id        String    @id @default(uuid())
+  text      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  level     Int       @default(0)
+  likesCount    Int @default(0)
+  dislikesCount Int @default(0)
+
+  // --- Relations ---
+  postId        String
+  authorId      String
+  parentId      String?
+  post          Post               @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author        User               @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  parent        Comment?           @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  children      Comment[]          @relation("CommentReplies")
+  reactions     CommentUserReaction[]
+  notifications Notification[]
+
+  @@index([postId, createdAt])
+  @@map("comments")
+}
+
+model PostLike {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  userId    String
+  postId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@map("post_likes")
+}
+
+model PostSave {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  userId    String
+  postId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@map("post_saves")
+}
+
+model PostShare {
+  id        String        @id @default(uuid())
+  platform  SharePlatform
+  createdAt DateTime      @default(now())
+  postId    String
+  sharerId  String
+  post      Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  sharer    User          @relation(fields: [sharerId], references: [id], onDelete: Cascade)
+
+  @@map("post_shares")
+}
+
+model CommentUserReaction {
+  id        String               @id @default(uuid())
+  reaction  CommentReactionState
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  userId    String
+  commentId String
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment   Comment              @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId])
+  @@map("comment_user_reactions")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  type      NotificationType
+  read      Boolean          @default(false)
+  metadata  Json?
+  createdAt DateTime         @default(now())
+
+  recipientId String
+  recipient   User           @relation("Recipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  senderId String
+  sender   User @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  // Link to the source of the notification
+  postId    String?
+  post      Post?   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  commentId String?
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId])
+  @@map("notifications")
+}
+
+
+// ===============================================
+// ===         ANALYTICS MODELS                ===
+// ===============================================
+
+model PostView {
+  id                 String   @id @default(uuid())
+  firstViewedAt      DateTime @default(now())
+  lastViewedAt       DateTime @updatedAt
+  viewCountByUser    Int      @default(1)
+  userId             String?
+  postId             String
+  anonymousVisitorId String?
+  user               User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  post               Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@unique([anonymousVisitorId, postId])
+  @@map("post_views")
+}
+
+model VisitorSession {
+  id               String        @id @default(uuid())
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  initialIpAddress String?
+  initialUserAgent String?
+  initialPath      String?
+  userId           String?
+  user             User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  pageViews        PageViewLog[]
+
+  @@index([userId])
+  @@map("visitor_sessions")
+}
+
+model PageViewLog {
+  id        String         @id @default(uuid())
+  path      String
+  createdAt DateTime       @default(now())
+  sessionId String
+  session   VisitorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("page_view_logs")
+}
+
+// ===============================================
+// ===             ENUMERATIONS                ===
+// ===============================================
+
+enum UserStatus {
+  ACTIVE
+  DEACTIVATED
+  BANNED
+}
+
+enum SystemRole {
+  USER
+  SYSTEM_CONTENT_CREATOR
+  DEVELOPER
+  SUPER_ADMIN
+}
+
+enum PostCategory {
+  GUIDE
+  SHOWCASE
+  RESOURCE
+}
+
+enum UpdateCategory {
+  APP_UPDATE
+  MARKETING
+  COMMUNITY
+}
+
+
+
+enum ThemePreference {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+enum SharePlatform {
+  TWITTER
+  FACEBOOK
+  LINKEDIN
+  EMAIL
+  WHATSAPP
+  REDDIT
+  LINK_COPIED
+  INTERNAL_MESSAGE
+  OTHER
+}
+
+enum CommentReactionState {
+  LIKED
+  DISLIKED
+}
+
+enum NotificationType {
+  NEW_COMMENT
+  POST_LIKE
+  NEW_FOLLOWER
+  COMMENT_REPLY
+  SYSTEM_UPDATE
+}
+

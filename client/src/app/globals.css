@@ -1,0 +1,185 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ==========================================================================
+  Synthwave Theme - Light Mode
+==========================================================================
+*/
+:root {
+  --radius: 0.75rem;
+
+  /* Base */
+  --background: oklch(0.98 0.003 240); /* Very light, slightly cool gray */
+  --foreground: oklch(0.15 0.01 260); /* Dark, slightly purplish gray */
+
+  /* Cards & Popovers */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.01 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0.01 260);
+
+  /* Primary (Cyan) */
+  --primary: oklch(0.6 0.18 195); /* Bright, saturated cyan */
+  --primary-foreground: oklch(0.1 0.01 260); /* Dark text for contrast */
+
+  /* Secondary (Purple) */
+  --secondary: oklch(0.92 0.04 280); /* Light pastel purple */
+  --secondary-foreground: oklch(0.4 0.1 275); /* Readable purple text */
+
+  /* Muted & Accent */
+  --muted: oklch(0.95 0.02 270); /* Very light purple-gray */
+  --muted-foreground: oklch(0.5 0.02 265); /* Muted purple-gray text */
+  --accent: oklch(0.92 0.04 280);
+  --accent-foreground: oklch(0.4 0.1 275);
+
+  /* Destructive (Pink) */
+  --destructive: oklch(0.65 0.22 340); /* Strong, vibrant pink */
+  --destructive-foreground: oklch(1 0 0);
+
+  /* Other UI Elements */
+  --border: oklch(0.9 0.01 270);
+  --input: oklch(0.9 0.01 270);
+  --ring: oklch(0.6 0.18 195 / 0.6); /* Cyan focus ring */
+
+  /* Charts - A vibrant, distinct palette */
+  --chart-1: oklch(0.7 0.18 190); /* Cyan */
+  --chart-2: oklch(0.7 0.15 275); /* Purple */
+  --chart-3: oklch(0.7 0.2 345); /* Pink */
+  --chart-4: oklch(0.8 0.2 140); /* Lime Green */
+  --chart-5: oklch(0.75 0.2 50); /* Orange */
+
+  /* Sidebar (uses a slightly different scheme for distinction) */
+  --sidebar: oklch(0.98 0.003 240);
+  --sidebar-foreground: oklch(0.4 0.02 265);
+  --sidebar-primary: oklch(0.6 0.18 195);
+  --sidebar-primary-foreground: oklch(0.1 0.01 260);
+  --sidebar-accent: oklch(0.92 0.04 280);
+  --sidebar-accent-foreground: oklch(0.4 0.1 275);
+  --sidebar-border: oklch(0.9 0.01 270);
+  --sidebar-ring: oklch(0.6 0.18 195 / 0.6);
+}
+
+/* ==========================================================================
+  Synthwave Theme - Dark Mode
+==========================================================================
+*/
+.dark {
+  /* Base */
+  --background: oklch(0.12 0.02 265); /* Deep, dark indigo */
+  --foreground: oklch(0.95 0.01 240); /* Light, cool gray text */
+
+  /* Cards & Popovers */
+  --card: oklch(0.16 0.025 268); /* Slightly lighter indigo for cards */
+  --card-foreground: oklch(0.95 0.01 240);
+  --popover: oklch(0.14 0.02 266);
+  --popover-foreground: oklch(0.95 0.01 240);
+
+  /* Primary (Cyan) */
+  --primary: oklch(0.75 0.19 195); /* Bright, glowing cyan */
+  --primary-foreground: oklch(0.1 0.02 260); /* Dark text for high contrast */
+
+  /* Secondary (Purple) */
+  --secondary: oklch(0.25 0.05 275); /* Deep, muted purple */
+  --secondary-foreground: oklch(0.95 0.01 240);
+
+  /* Muted & Accent */
+  --muted: oklch(0.25 0.05 275 / 0.7);
+  --muted-foreground: oklch(0.65 0.03 260); /* Lighter gray for muted text */
+  --accent: oklch(0.25 0.05 275);
+  --accent-foreground: oklch(0.95 0.01 240);
+
+  /* Destructive (Pink) */
+  --destructive: oklch(0.65 0.25 350); /* Bright, neon-like pink */
+  --destructive-foreground: oklch(0.1 0.01 260);
+
+  /* Other UI Elements */
+  --border: oklch(0.95 0.01 240 / 0.15);
+  --input: oklch(0.95 0.01 240 / 0.1);
+  --ring: oklch(0.75 0.19 195 / 0.7); /* Cyan focus ring */
+
+  /* Charts - A vibrant, distinct palette for dark mode */
+  --chart-1: oklch(0.75 0.19 195); /* Cyan */
+  --chart-2: oklch(0.65 0.18 275); /* Purple */
+  --chart-3: oklch(0.7 0.25 350); /* Pink */
+  --chart-4: oklch(0.8 0.22 140); /* Lime Green */
+  --chart-5: oklch(0.75 0.22 50); /* Orange */
+
+  /* Sidebar */
+  --sidebar: oklch(0.14 0.02 266);
+  --sidebar-foreground: oklch(0.7 0.03 260);
+  --sidebar-primary: oklch(0.75 0.19 195);
+  --sidebar-primary-foreground: oklch(0.1 0.02 260);
+  --sidebar-accent: oklch(0.25 0.05 275);
+  --sidebar-accent-foreground: oklch(0.95 0.01 240);
+  --sidebar-border: oklch(0.95 0.01 240 / 0.15);
+  --sidebar-ring: oklch(0.75 0.19 195 / 0.7);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s ease-out forwards;
+}
