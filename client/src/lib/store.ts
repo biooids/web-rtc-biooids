@@ -14,6 +14,7 @@ import { authApiSlice } from "./features/auth/authApiSlice";
 import uiReducer from "./features/ui/uiSlice";
 import { userApiSlice } from "./features/user/userApiSlice";
 import { adminApiSlice } from "./features/admin/adminApiSlice";
+import webrtcReducer from "./features/webrtc/webrtcSlice"; // <-- 1. ADD THIS IMPORT
 
 export const store = configureStore({
   reducer: {
@@ -22,6 +23,7 @@ export const store = configureStore({
     user: userReducer,
     uploadProgress: uploadProgressReducer,
     ui: uiReducer,
+    webrtc: webrtcReducer, // <-- 2. ADD THIS LINE
 
     // RTK Query Reducers
     [userApiSlice.reducerPath]: userApiSlice.reducer,
@@ -30,7 +32,9 @@ export const store = configureStore({
   },
   middleware: (getDefaultMiddleware) =>
     // Chain all middleware correctly using .concat()
-    getDefaultMiddleware()
+    getDefaultMiddleware({
+      serializableCheck: false,
+    })
       .concat(userApiSlice.middleware)
       .concat(authApiSlice.middleware)
       .concat(adminApiSlice.middleware),

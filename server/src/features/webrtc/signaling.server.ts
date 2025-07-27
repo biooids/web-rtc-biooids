@@ -1,114 +1,104 @@
-// FILE: src/features/webrtc/signaling.server.ts
-
 import { WebSocketServer, WebSocket } from "ws";
 import { Server as HttpServer } from "http";
 import { v4 as uuidv4 } from "uuid";
-import { logger } from "@/config/logger";
-import {
-  SignalingMessage,
-  SdpPayload,
-  IceCandidatePayload,
-  Client,
-} from "./webrtc.types";
 
-// This will store all our active rooms. The key is the roomId,
-// and the value is a Map of connected clients (keyed by their unique ID).
-const rooms = new Map<string, Map<string, Client>>();
+// This in-memory map will store all our active rooms.
+// The key is the roomId, and the value is another Map of connected clients.
+const rooms = new Map<string, Map<string, WebSocket>>();
 
 /**
- * Initializes the WebSocket signaling server and attaches it to the main HTTP server.
+ * Initializes the WebSocket signaling server and attaches it to your main HTTP server.
  * @param httpServer The main HTTP server instance from your application.
  */
 export const initSignalingServer = (httpServer: HttpServer) => {
   const wss = new WebSocketServer({ server: httpServer });
 
   wss.on("connection", (ws: WebSocket, req) => {
-    // Extract the roomId from the connection URL (e.g., /?roomId=my-room-123)
-    const url = new URL(req.url!, `ws://${req.headers.host}`);
+    // 1. Extract the roomId from the connection URL.
+    const url = new URL(req.url || "", `ws://${req.headers.host}`);
     const roomId = url.searchParams.get("roomId");
 
     if (!roomId) {
-      logger.warn("Connection attempt without roomId. Closing connection.");
-      ws.close(1008, "Room ID is required");
+      console.log("[Signal] Connection rejected: Missing roomId");
+      ws.close(1008, "Room ID is required.");
       return;
     }
 
-    const clientId = uuidv4();
-    logger.info(
-      { roomId, clientId },
-      "New client connected to signaling server"
-    );
-
-    // Create the room if it doesn't exist
+    // 2. Create the room if it's the first client joining.
     if (!rooms.has(roomId)) {
       rooms.set(roomId, new Map());
     }
-
     const room = rooms.get(roomId)!;
-    room.set(clientId, { id: clientId, ws });
+    const clientId = uuidv4();
 
-    // --- Message Handling ---
-    ws.on("message", (rawMessage: Buffer) => {
-      try {
-        const message: SignalingMessage = JSON.parse(rawMessage.toString());
-        message.senderId = clientId; // Attach sender ID to the message
+    // 3. Add the new client to the room.
+    room.set(clientId, ws);
+    console.log(`[Signal] Client ${clientId} connected to room ${roomId}`);
 
-        // Relay the message to all *other* clients in the same room
-        broadcastToRoom(roomId, message, clientId);
-      } catch (error) {
-        logger.error({ err: error, clientId }, "Failed to parse message");
+    // 4. Send an 'init' message to the new client.
+    // This gives them their unique ID and a list of all other peers already in the room.
+    const peerIds = Array.from(room.keys()).filter((id) => id !== clientId);
+    ws.send(
+      JSON.stringify({ type: "init", payload: { selfId: clientId, peerIds } })
+    );
+
+    // 5. Announce the new client's arrival to all existing members of the room.
+    const joinedMessage = JSON.stringify({
+      type: "user-joined",
+      payload: { peerId: clientId },
+    });
+    room.forEach((peerWs, peerId) => {
+      if (peerId !== clientId && peerWs.readyState === WebSocket.OPEN) {
+        peerWs.send(joinedMessage);
       }
     });
 
-    // --- Disconnection Handling ---
-    ws.on("close", () => {
-      logger.info({ roomId, clientId }, "Client disconnected");
-      room.delete(clientId);
+    // --- Handle Messages from this Client ---
+    ws.on("message", (rawMessage: Buffer) => {
+      try {
+        const message = JSON.parse(rawMessage.toString());
+        // Add the sender's ID to the message so the recipient knows who it's from.
+        message.senderId = clientId;
 
-      // If the room is now empty, clean it up
-      if (room.size === 0) {
-        rooms.delete(roomId);
-        logger.info({ roomId }, "Room is now empty and has been removed.");
-      } else {
-        // Notify other clients that this user has left
-        broadcastToRoom(
-          roomId,
-          {
-            type: "user-disconnected",
-            payload: { id: clientId },
-          },
-          clientId // This message comes from the server, but we use the disconnected ID
+        // If the message has a specific target, send it only to that client.
+        const targetWs = message.targetId ? room.get(message.targetId) : null;
+        if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+          targetWs.send(JSON.stringify(message));
+        }
+      } catch (error) {
+        console.error(
+          `[Signal] Failed to process message from ${clientId}:`,
+          error
         );
       }
     });
 
+    // --- Handle Client Disconnection ---
+    ws.on("close", () => {
+      console.log(
+        `[Signal] Client ${clientId} disconnected from room ${roomId}`
+      );
+      room.delete(clientId);
+
+      // If the room is now empty, remove it from memory.
+      if (room.size === 0) {
+        rooms.delete(roomId);
+        console.log(`[Signal] Room ${roomId} is empty and has been removed.`);
+      } else {
+        // Notify remaining clients that this user has left.
+        const leftMessage = JSON.stringify({
+          type: "user-disconnected",
+          payload: { peerId: clientId },
+        });
+        room.forEach((peerWs) => peerWs.send(leftMessage));
+      }
+    });
+
+    // --- Handle Errors ---
     ws.on("error", (error) => {
-      logger.error({ err: error, clientId }, "WebSocket error for client");
+      console.error(`[Signal] WebSocket error for client ${clientId}:`, error);
     });
   });
 
-  logger.info("✅ WebRTC Signaling Server initialized successfully.");
+  console.log("✅ WebRTC Signaling Server has been initialized.");
 };
-
-/**
- * Broadcasts a message to all clients in a room except the sender.
- * @param roomId The ID of the room.
- * @param message The message to send.
- * @param excludeId The ID of the client to exclude (the sender).
- */
-function broadcastToRoom(
-  roomId: string,
-  message: SignalingMessage,
-  excludeId: string
-) {
-  const room = rooms.get(roomId);
-  if (!room) return;
-
-  const outgoingMessage = JSON.stringify(message);
-
-  for (const [id, client] of room.entries()) {
-    if (id !== excludeId && client.ws.readyState === WebSocket.OPEN) {
-      client.ws.send(outgoingMessage);
-    }
-  }
-}

@@ -7,6 +7,7 @@ import {
   LayoutGrid,
   Bookmark,
   Compass,
+  PhoneCall,
 } from "lucide-react";
 
 export const navLinks = [
@@ -34,6 +35,11 @@ export const navLinks = [
     href: "/profile",
     label: "My Profile",
     icon: User,
+  },
+  {
+    href: "/call",
+    label: "Join Call",
+    icon: PhoneCall, // Placeholder for a message icon
   },
 ];
 
