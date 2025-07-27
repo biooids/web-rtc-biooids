@@ -176,7 +176,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "/media/biooids/WD/CS50/projects/start-up/start-auth/server/prisma/generated/prisma",
+      "value": "/media/biooids/WD/CS50/projects/web-rtc/web-rtc-start-auth/server/prisma/generated/prisma",
       "fromEnvVar": null
     },
     "config": {
@@ -190,7 +190,7 @@ const config = {
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "/media/biooids/WD/CS50/projects/start-up/start-auth/server/prisma/schema.prisma",
+    "sourceFilePath": "/media/biooids/WD/CS50/projects/web-rtc/web-rtc-start-auth/server/prisma/schema.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {
