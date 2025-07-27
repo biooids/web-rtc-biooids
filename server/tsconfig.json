@@ -2,7 +2,7 @@
   "compilerOptions": {
     // --- Target and Libraries ---
     "target": "ES2022",
-    "lib": ["es2022"],
+    "lib": ["es2022", "dom"],
     "useDefineForClassFields": true,
 
     // --- Modules ---

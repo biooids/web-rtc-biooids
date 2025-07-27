@@ -4,6 +4,7 @@ import app from "./app.js";
 import { config } from "./config/index.js";
 import { disconnectPrisma, connectPrisma } from "./db/prisma.js";
 import { logger } from "./config/logger.js";
+import { initSignalingServer } from "./features/webrtc/signaling.server.js";
 
 const PORT = config.port;
 const server = http.createServer(app);
@@ -17,6 +18,7 @@ async function startServer() {
   try {
     // connectPrisma will log its own success/error messages
     await connectPrisma();
+    initSignalingServer(server);
 
     server.listen(PORT, () => {
       logger.info(`🚀 Server listening on http://localhost:${PORT}`);
