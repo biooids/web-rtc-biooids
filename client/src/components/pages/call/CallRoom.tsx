@@ -40,7 +40,6 @@ export default function CallRoom({
   localStream,
   onLeave,
 }: CallRoomProps) {
-  // --- FIX: Destructure the new acceptUnmuteRequest function ---
   const {
     myId,
     remoteStreams,
@@ -61,10 +60,23 @@ export default function CallRoom({
     isRoomMutedByHost,
     forceMuteUser,
     acceptUnmuteRequest,
+    toggleLocalAudio,
   } = useWebRTC(roomId, displayName, localStream);
 
   const dispatch = useAppDispatch();
   const isChatOpen = useAppSelector((state) => state.chat.isOpen);
+
+  const [isLocalMicMuted, setIsLocalMicMuted] = useState(
+    !localStream.getAudioTracks()[0]?.enabled
+  );
+
+  useEffect(() => {
+    const audioTrack = localStream.getAudioTracks()[0];
+    if (!audioTrack) return;
+    const syncState = () => setIsLocalMicMuted(!audioTrack.enabled);
+    const intervalId = setInterval(syncState, 200);
+    return () => clearInterval(intervalId);
+  }, [localStream]);
 
   const [layout, setLayout] = useState<"grid" | "featured" | "sidebar">("grid");
   const [featuredPeerId, setFeaturedPeerId] = useState<string>("local");
@@ -83,10 +95,7 @@ export default function CallRoom({
 
   const handleAcceptUnmuteRequest = () => {
     const audioTrack = localStream.getAudioTracks()[0];
-    if (audioTrack) {
-      audioTrack.enabled = true;
-    }
-    // --- FIX: Call the function from the hook to close the dialog ---
+    if (audioTrack) audioTrack.enabled = true;
     acceptUnmuteRequest();
   };
 
@@ -263,6 +272,7 @@ export default function CallRoom({
                         displayName={displayName}
                         peerId={peerId}
                         localPeerId={myId}
+                        isLocalMicMuted={isLocalMicMuted}
                       />
                     </div>
                   ))}
@@ -281,6 +291,7 @@ export default function CallRoom({
                       displayName={featuredStream.displayName}
                       peerId={featuredStream.peerId}
                       localPeerId={myId}
+                      isLocalMicMuted={isLocalMicMuted}
                     />
                   </div>
                   <div
@@ -305,6 +316,7 @@ export default function CallRoom({
                           displayName={displayName}
                           peerId={peerId}
                           localPeerId={myId}
+                          isLocalMicMuted={isLocalMicMuted}
                         />
                       </div>
                     ))}
@@ -323,6 +335,8 @@ export default function CallRoom({
             onToggleChat={handleToggleChat}
             onToggleParticipants={handleToggleParticipants}
             isMicDisabled={isMicDisabled}
+            onToggleLocalAudio={toggleLocalAudio}
+            isMicMuted={isLocalMicMuted}
           />
         </div>
       </div>

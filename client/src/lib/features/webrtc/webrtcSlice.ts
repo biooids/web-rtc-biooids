@@ -43,6 +43,7 @@ const webrtcSlice = createSlice({
         state.peerMuteStatus[peerId] = {
           isMutedByHost: false,
           personallyMutedBy: [],
+          isSelfMuted: false, // --- FIX: Initialize new property ---
         };
       }
     },
@@ -110,6 +111,16 @@ const webrtcSlice = createSlice({
         (id) => id !== action.payload
       );
     },
+    // --- FIX: Add new reducer to handle peer self-mute updates ---
+    setPeerSelfMuted: (
+      state,
+      action: PayloadAction<{ peerId: string; isMuted: boolean }>
+    ) => {
+      const { peerId, isMuted } = action.payload;
+      if (state.peerMuteStatus[peerId]) {
+        state.peerMuteStatus[peerId].isSelfMuted = isMuted;
+      }
+    },
   },
 });
 
@@ -128,6 +139,7 @@ export const {
   setUnmuteRequest,
   addAllowedSpeaker,
   removeAllowedSpeaker,
+  setPeerSelfMuted,
 } = webrtcSlice.actions;
 
 export default webrtcSlice.reducer;

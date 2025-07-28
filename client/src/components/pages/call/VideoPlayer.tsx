@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect, useState, useMemo } from "react";
+import React, { useRef, useEffect, useMemo } from "react";
 import { useAppSelector } from "@/lib/hooks/hooks";
 import { Card } from "@/components/ui/card";
 import { Reaction } from "@/lib/features/reactions/reactionsSlice";
@@ -12,6 +12,7 @@ interface VideoPlayerProps {
   displayName?: string;
   peerId: string;
   localPeerId: string | null;
+  isLocalMicMuted: boolean; // --- FIX: Receive local mute state ---
 }
 
 const ReactionBubble = ({ reaction }: { reaction: Reaction }) => (
@@ -25,15 +26,16 @@ export default function VideoPlayer({
   displayName,
   peerId,
   localPeerId,
+  isLocalMicMuted,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  // --- FIX: Get the global room mute status and host status ---
   const {
     peerMuteStatus,
     peerDisplayNames,
     isRoomMutedByHost,
     isHost,
     allowedToSpeak,
+    myId,
   } = useAppSelector((state) => state.webrtc);
 
   const reactionForPeer = useAppSelector(
@@ -44,9 +46,7 @@ export default function VideoPlayer({
   );
   const reaction = peerId === "local" ? reactionForLocal : reactionForPeer;
 
-  const [isRemoteTrackMuted, setIsRemoteTrackMuted] = useState(false);
-
-  const isLocal = peerId === "local" || peerId === localPeerId;
+  const isLocal = peerId === "local" || peerId === myId;
   const muteStatus = peerMuteStatus[peerId];
 
   useEffect(() => {
@@ -59,42 +59,26 @@ export default function VideoPlayer({
     }
   }, [stream, muteStatus, localPeerId, isLocal]);
 
-  useEffect(() => {
-    const audioTrack = stream?.getAudioTracks()[0];
-    if (audioTrack) {
-      const updateMuteState = () => setIsRemoteTrackMuted(!audioTrack.enabled);
-      updateMuteState();
-      const interval = setInterval(updateMuteState, 500);
-      return () => clearInterval(interval);
-    }
-  }, [stream]);
-
   const muteReasons = useMemo(() => {
-    if (!muteStatus || isLocal) return [];
+    if (isLocal || !muteStatus) return [];
     const reasons: string[] = [];
     const isAllowed = allowedToSpeak.includes(peerId);
 
-    // Only show "Muted by host" if they are not specifically allowed to speak
-    if ((muteStatus.isMutedByHost || isRemoteTrackMuted) && !isAllowed) {
-      reasons.push("Muted by host");
+    if (muteStatus.isSelfMuted) {
+      reasons.push("Muted");
     }
+
+    if (muteStatus.isMutedByHost && !isAllowed) {
+      reasons.push(reasons.length > 0 ? "by host" : "Muted by host");
+    }
+
     muteStatus.personallyMutedBy.forEach((muterId) => {
       if (muterId === localPeerId) {
-        reasons.push("Muted by you");
-      } else {
-        reasons.push(`Muted by ${peerDisplayNames[muterId] || "another user"}`);
+        reasons.push("by you");
       }
     });
-    return [...new Set(reasons)];
-  }, [
-    muteStatus,
-    isRemoteTrackMuted,
-    localPeerId,
-    peerDisplayNames,
-    isLocal,
-    allowedToSpeak,
-    peerId,
-  ]);
+    return reasons.length > 0 ? [reasons.join(", ")] : [];
+  }, [muteStatus, localPeerId, isLocal, allowedToSpeak, peerId]);
 
   return (
     <Card className="overflow-hidden aspect-video relative bg-muted">
@@ -107,17 +91,28 @@ export default function VideoPlayer({
       />
       {reaction && <ReactionBubble reaction={reaction} />}
 
-      {/* --- FIX: New logic to show an overlay on YOUR screen when muted by host --- */}
-      {isLocal && isRoomMutedByHost && !isHost && (
+      {/* --- FIX: Logic for displaying self-mute overlay on your own card --- */}
+      {isLocal && isLocalMicMuted && (
         <div className="absolute inset-0 bg-black/50 flex items-center justify-center p-4 text-center">
           <div className="flex items-center gap-2 text-white text-sm">
             <MicOff className="w-5 h-5" />
-            You are muted by the host
+            You muted yourself
           </div>
         </div>
       )}
 
-      {/* This overlay is for remote peers */}
+      {isLocal &&
+        isRoomMutedByHost &&
+        !isHost &&
+        !allowedToSpeak.includes(myId || "") && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center p-4 text-center">
+            <div className="flex items-center gap-2 text-white text-sm">
+              <MicOff className="w-5 h-5" />
+              You are muted by the host
+            </div>
+          </div>
+        )}
+
       {muteReasons.length > 0 && !isLocal && (
         <div className="absolute top-2 right-2 p-2 rounded-full bg-black/50">
           <MicOff className="w-5 h-5 text-white" />
@@ -128,11 +123,7 @@ export default function VideoPlayer({
         <div className="absolute bottom-2 left-2 px-2 py-1 rounded bg-black/50 text-white text-sm backdrop-blur-sm">
           <p>{displayName}</p>
           {muteReasons.length > 0 && !isLocal && (
-            <ul className="text-xs opacity-80 list-disc list-inside">
-              {muteReasons.map((reason) => (
-                <li key={reason}>{reason}</li>
-              ))}
-            </ul>
+            <p className="text-xs opacity-80">{muteReasons[0]}</p>
           )}
         </div>
       )}

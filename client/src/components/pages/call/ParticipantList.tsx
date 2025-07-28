@@ -11,7 +11,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-// --- FIX: Update props interface ---
 interface ParticipantListProps {
   localDisplayName: string;
   isHost: boolean;
@@ -44,11 +43,9 @@ export default function ParticipantList({
     if (!isHost || !peerMuteStatus[peerId]?.isMutedByHost) {
       return null;
     }
-
     const isAllowed = allowedToSpeak.includes(peerId);
 
     if (isAllowed) {
-      // --- FIX: Show "Force Mute" button if user is allowed to speak ---
       return (
         <TooltipProvider>
           <Tooltip>
@@ -68,7 +65,6 @@ export default function ParticipantList({
         </TooltipProvider>
       );
     } else {
-      // --- FIX: Show "Ask to Unmute" button if user is not yet allowed ---
       return (
         <TooltipProvider>
           <Tooltip>
@@ -113,6 +109,9 @@ export default function ParticipantList({
             if (!status) return null;
             const isPersonallyMuted =
               localPeerId && status.personallyMutedBy.includes(localPeerId);
+            // --- FIX: Get the self-muted status ---
+            const isSelfMuted = status.isSelfMuted;
+
             return (
               <div key={peerId} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -122,6 +121,12 @@ export default function ParticipantList({
                     <span className="text-xs text-primary font-bold">
                       (Host)
                     </span>
+                  )}
+                  {/* --- FIX: Show an icon if the user is self-muted --- */}
+                  {isSelfMuted && !status.isMutedByHost && (
+                    <MicOff className="w-4 h-4 text-muted-foreground">
+                      <title>Muted</title>
+                    </MicOff>
                   )}
                 </div>
                 <div className="flex items-center gap-1">

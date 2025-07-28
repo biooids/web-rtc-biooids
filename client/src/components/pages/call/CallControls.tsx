@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Mic,
@@ -14,7 +14,6 @@ import {
   Users,
 } from "lucide-react";
 
-// --- FIX: Add isMicDisabled to the props interface ---
 interface CallControlsProps {
   onLeave: () => void;
   localStream: MediaStream;
@@ -23,6 +22,8 @@ interface CallControlsProps {
   onToggleChat: () => void;
   onToggleParticipants: () => void;
   isMicDisabled: boolean;
+  onToggleLocalAudio: () => void;
+  isMicMuted: boolean; // --- FIX: Receive mute state as a prop ---
 }
 
 export default function CallControls({
@@ -33,42 +34,28 @@ export default function CallControls({
   onToggleChat,
   onToggleParticipants,
   isMicDisabled,
+  onToggleLocalAudio,
+  isMicMuted,
 }: CallControlsProps) {
-  const [isMicMuted, setIsMicMuted] = useState(
-    !localStream.getAudioTracks()[0]?.enabled
-  );
+  // --- FIX: State for camera is still local, but mic state is now passed in ---
   const [isCameraOff, setIsCameraOff] = useState(
     !localStream.getVideoTracks()[0]?.enabled
   );
-
-  useEffect(() => {
-    const audioTrack = localStream.getAudioTracks()[0];
-    if (!audioTrack) return;
-    const syncState = () => setIsMicMuted(!audioTrack.enabled);
-    const intervalId = setInterval(syncState, 200);
-    return () => clearInterval(intervalId);
-  }, [localStream]);
-
-  const toggleMic = () => {
-    const audioTrack = localStream.getAudioTracks()[0];
-    if (audioTrack) {
-      audioTrack.enabled = !audioTrack.enabled;
-    }
-  };
 
   const toggleCamera = () => {
     const videoTrack = localStream.getVideoTracks()[0];
     if (videoTrack) {
       videoTrack.enabled = !videoTrack.enabled;
+      setIsCameraOff(!videoTrack.enabled);
     }
   };
 
   return (
     <div className="flex justify-center items-center p-4 bg-card/50 rounded-lg border">
       <div className="flex gap-4">
-        {/* --- FIX: Add the 'disabled' attribute to the button --- */}
+        {/* --- FIX: Button now uses the prop for its state and calls the prop function --- */}
         <Button
-          onClick={toggleMic}
+          onClick={onToggleLocalAudio}
           variant="secondary"
           size="lg"
           className="rounded-full w-16 h-16"

@@ -91,22 +91,18 @@ export const initSignalingServer = (httpServer: HttpServer) => {
           case "chat-message":
           case "reaction":
             room.clients.forEach((c) => {
-              if (c.ws.readyState === WebSocket.OPEN) {
+              if (c.ws.readyState === WebSocket.OPEN)
                 c.ws.send(JSON.stringify(message));
-              }
             });
             break;
 
           case "personal-mute-toggle":
-          // --- FIX: Add accepted-unmute-request to be broadcast to OTHERS ---
           case "accepted-unmute-request":
+          // --- FIX: Add the new message type to be broadcast to other participants ---
+          case "local-audio-state-changed":
             room.clients.forEach((peer, peerId) => {
-              if (
-                peerId !== clientId &&
-                peer.ws.readyState === WebSocket.OPEN
-              ) {
+              if (peerId !== clientId && peer.ws.readyState === WebSocket.OPEN)
                 peer.ws.send(JSON.stringify(message));
-              }
             });
             break;
 
@@ -124,7 +120,18 @@ export const initSignalingServer = (httpServer: HttpServer) => {
           case "force-mute":
             if (clientId !== room.hostId) return;
             const targetToMute = room.clients.get(message.targetId);
-            if (targetToMute) targetToMute.ws.send(JSON.stringify(message));
+            if (targetToMute) {
+              targetToMute.ws.send(JSON.stringify(message));
+              const revokedMessage = JSON.stringify({
+                type: "permission-revoked",
+                payload: { peerId: message.targetId },
+              });
+              room.clients.forEach((peer, peerId) => {
+                if (peerId !== clientId && peerId !== message.targetId) {
+                  peer.ws.send(revokedMessage);
+                }
+              });
+            }
             break;
 
           default:

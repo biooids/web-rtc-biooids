@@ -36,7 +36,6 @@ export const useWebRTC = (
     },
     [dispatch]
   );
-
   const forceMuteUser = useCallback(
     (targetId: string) => {
       webrtcServiceRef.current?.forceMute(targetId);
@@ -44,20 +43,18 @@ export const useWebRTC = (
     },
     [dispatch]
   );
-
   const declineUnmuteRequest = useCallback(() => {
     dispatch(setUnmuteRequest(false));
     if (webrtcState.hostId) {
       webrtcServiceRef.current?.declineUnmuteRequest(webrtcState.hostId);
     }
   }, [dispatch, webrtcState.hostId]);
-
   const acceptUnmuteRequest = useCallback(() => {
+    if (!webrtcState.myId) return;
     webrtcServiceRef.current?.sendAcceptedUnmuteRequest();
-    dispatch(addAllowedSpeaker(webrtcState.myId!));
+    dispatch(addAllowedSpeaker(webrtcState.myId));
     dispatch(setUnmuteRequest(false));
   }, [dispatch, webrtcState.myId]);
-
   const leaveCall = useCallback(() => webrtcServiceRef.current?.hangUp(), []);
   const replaceTrack = useCallback(async (track: MediaStreamTrack) => {
     await webrtcServiceRef.current?.replaceTrack(track);
@@ -75,6 +72,11 @@ export const useWebRTC = (
     webrtcServiceRef.current?.togglePersonalMute(peerId);
   }, []);
 
+  // --- FIX: Add the new toggleLocalAudio function ---
+  const toggleLocalAudio = useCallback(() => {
+    webrtcServiceRef.current?.toggleLocalAudio();
+  }, []);
+
   return {
     ...webrtcState,
     leaveCall,
@@ -87,5 +89,6 @@ export const useWebRTC = (
     declineUnmuteRequest,
     forceMuteUser,
     acceptUnmuteRequest,
+    toggleLocalAudio,
   };
 };

@@ -7,6 +7,7 @@ export interface PeerMutePayload {
 export interface MuteStatus {
   isMutedByHost: boolean;
   personallyMutedBy: string[];
+  isSelfMuted: boolean; // --- FIX: Add flag for user's own mute action ---
 }
 
 export interface WebRTCState {

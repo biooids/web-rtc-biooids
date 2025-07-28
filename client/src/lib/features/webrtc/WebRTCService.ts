@@ -13,6 +13,7 @@ import {
   setUnmuteRequest,
   removeAllowedSpeaker,
   addAllowedSpeaker,
+  setPeerSelfMuted,
 } from "./webrtcSlice";
 import { addMessage, ChatMessage } from "../chat/chatSlice";
 import { showReaction } from "../reactions/reactionsSlice";
@@ -121,12 +122,25 @@ export class WebRTCService {
       case "force-mute":
         const audioTrack = this.localStream?.getAudioTracks()[0];
         if (audioTrack) audioTrack.enabled = false;
+        if (this.myId) this.dispatch(removeAllowedSpeaker(this.myId));
         break;
       case "decline-unmute":
         this.dispatch(removeAllowedSpeaker(message.senderId));
         break;
       case "accepted-unmute-request":
         this.dispatch(addAllowedSpeaker(message.senderId));
+        break;
+      case "permission-revoked":
+        this.dispatch(removeAllowedSpeaker(message.payload.peerId));
+        break;
+      // --- FIX: Handle the new message to sync peer's local mute state ---
+      case "local-audio-state-changed":
+        this.dispatch(
+          setPeerSelfMuted({
+            peerId: message.senderId,
+            isMuted: message.payload.isMuted,
+          })
+        );
         break;
       case "offer":
         this.handleOffer(message.senderId, message.payload.sdp);
@@ -140,6 +154,18 @@ export class WebRTCService {
     }
   }
 
+  // --- FIX: New method to toggle local audio and broadcast the change ---
+  public toggleLocalAudio() {
+    const audioTrack = this.localStream?.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled;
+      this.sendBroadcastMessage({
+        type: "local-audio-state-changed",
+        payload: { isMuted: !audioTrack.enabled },
+      });
+    }
+  }
+
   public requestUnmute(targetId: string) {
     this.sendMessage({
       type: "request-unmute",
@@ -147,19 +173,15 @@ export class WebRTCService {
       payload: {},
     });
   }
-
   public forceMute(targetId: string) {
     this.sendMessage({ type: "force-mute", targetId: targetId, payload: {} });
   }
-
   public declineUnmuteRequest(hostId: string) {
     this.sendMessage({ type: "decline-unmute", targetId: hostId, payload: {} });
   }
-
   public sendAcceptedUnmuteRequest() {
     this.sendBroadcastMessage({ type: "accepted-unmute-request", payload: {} });
   }
-
   public togglePersonalMute(peerIdToMute: string) {
     if (!this.myId) return;
     const webrtcState = store.getState().webrtc;
