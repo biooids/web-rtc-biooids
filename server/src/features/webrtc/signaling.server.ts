@@ -7,7 +7,13 @@ interface Client {
   displayName: string;
 }
 
-const rooms = new Map<string, Map<string, Client>>();
+interface Room {
+  hostId: string | null;
+  clients: Map<string, Client>;
+  isEveryoneMuted: boolean; // Track the room's mute state
+}
+
+const rooms = new Map<string, Room>();
 
 export const initSignalingServer = (httpServer: HttpServer) => {
   const wss = new WebSocketServer({ server: httpServer });
@@ -23,32 +29,43 @@ export const initSignalingServer = (httpServer: HttpServer) => {
     }
 
     if (!rooms.has(roomId)) {
-      rooms.set(roomId, new Map());
+      rooms.set(roomId, {
+        hostId: null,
+        clients: new Map(),
+        isEveryoneMuted: false,
+      });
     }
     const room = rooms.get(roomId)!;
     const clientId = uuidv4();
-    room.set(clientId, { ws, displayName });
-    console.log(
-      `[Signal] Client ${clientId} (${displayName}) connected to room ${roomId}`
-    );
 
-    // --- FIX IS HERE ---
-    // 1. Get the list of all peers already in the room.
-    const peers = Array.from(room.entries())
-      .filter(([id]) => id !== clientId) // Exclude the new client itself
+    if (!room.hostId) {
+      room.hostId = clientId;
+    }
+
+    room.clients.set(clientId, { ws, displayName });
+
+    const peers = Array.from(room.clients.entries())
+      .filter(([id]) => id !== clientId)
       .map(([id, client]) => ({ id, displayName: client.displayName }));
 
-    // 2. Send the 'init' message with the list of peers to the new client.
+    // Tell the new user the current global mute state
     ws.send(
-      JSON.stringify({ type: "init", payload: { selfId: clientId, peers } })
+      JSON.stringify({
+        type: "init",
+        payload: {
+          selfId: clientId,
+          peers,
+          hostId: room.hostId,
+          isRoomMuted: room.isEveryoneMuted,
+        },
+      })
     );
 
-    // Announce the new client to all existing peers. They will initiate the calls.
     const joinedMessage = JSON.stringify({
       type: "user-joined",
-      payload: { peerId: clientId, displayName },
+      payload: { peerId: clientId, displayName, hostId: room.hostId },
     });
-    room.forEach((peer, peerId) => {
+    room.clients.forEach((peer, peerId) => {
       if (peerId !== clientId && peer.ws.readyState === WebSocket.OPEN) {
         peer.ws.send(joinedMessage);
       }
@@ -58,31 +75,42 @@ export const initSignalingServer = (httpServer: HttpServer) => {
       try {
         const message = JSON.parse(rawMessage.toString());
         message.senderId = clientId;
-        const targetClient = message.targetId
-          ? room.get(message.targetId)
-          : null;
-        if (targetClient && targetClient.ws.readyState === WebSocket.OPEN) {
-          targetClient.ws.send(JSON.stringify(message));
+        message.senderName = displayName;
+
+        // Host wants to toggle the mute state for everyone
+        if (message.type === "toggle-mute-all") {
+          room.isEveryoneMuted = message.payload.isMuted;
+          const updatedStateMessage = JSON.stringify({
+            type: "all-peers-muted-state-changed",
+            payload: { isMuted: room.isEveryoneMuted },
+          });
+          room.clients.forEach((c) => c.ws.send(updatedStateMessage));
+        } else if (message.targetId) {
+          const targetClient = room.clients.get(message.targetId);
+          if (targetClient) {
+            targetClient.ws.send(JSON.stringify(message));
+          }
+        } else {
+          room.clients.forEach((c) => c.ws.send(JSON.stringify(message)));
         }
       } catch (error) {
-        console.error(
-          `[Signal] Failed to process message from ${clientId}:`,
-          error
-        );
+        console.error(`[Signal] Error processing message:`, error);
       }
     });
 
     ws.on("close", () => {
-      console.log(`[Signal] Client ${clientId} (${displayName}) disconnected`);
-      room.delete(clientId);
-      if (room.size === 0) {
-        rooms.delete(roomId);
-      } else {
+      room.clients.delete(clientId);
+      if (room.clients.size > 0) {
+        if (room.hostId === clientId) {
+          room.hostId = room.clients.keys().next().value || null;
+        }
         const leftMessage = JSON.stringify({
           type: "user-disconnected",
-          payload: { peerId: clientId },
+          payload: { peerId: clientId, newHostId: room.hostId },
         });
-        room.forEach((peer) => peer.ws.send(leftMessage));
+        room.clients.forEach((peer) => peer.ws.send(leftMessage));
+      } else {
+        rooms.delete(roomId);
       }
     });
 

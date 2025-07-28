@@ -1,19 +1,30 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
+export interface MuteStatus {
+  isMutedByHost: boolean;
+  personallyMutedBy: string[];
+}
+
 export interface WebRTCState {
   isCallActive: boolean;
   roomId: string | null;
+  myId: string | null;
+  isHost: boolean;
+  hostId: string | null;
   remoteStreams: Record<string, MediaStream>;
-  // 1. Add a map for peer display names
   peerDisplayNames: Record<string, string>;
+  peerMuteStatus: Record<string, MuteStatus>;
 }
 
 const initialState: WebRTCState = {
   isCallActive: false,
   roomId: null,
+  myId: null,
+  isHost: false,
+  hostId: null,
   remoteStreams: {},
-  // 2. Initialize the empty map
   peerDisplayNames: {},
+  peerMuteStatus: {},
 };
 
 const webrtcSlice = createSlice({
@@ -24,15 +35,36 @@ const webrtcSlice = createSlice({
       state.isCallActive = true;
       state.roomId = action.payload;
     },
-    callEnded: (state) => {
-      Object.values(state.remoteStreams).forEach((stream) => {
+    callEnded: () => initialState,
+    setMyId: (state, action: PayloadAction<string>) => {
+      state.myId = action.payload;
+    },
+    setIsHost: (state, action: PayloadAction<boolean>) => {
+      state.isHost = action.payload;
+    },
+    setHostId: (state, action: PayloadAction<string | null>) => {
+      state.hostId = action.payload;
+    },
+    addPeer: (
+      state,
+      action: PayloadAction<{ peerId: string; displayName: string }>
+    ) => {
+      const { peerId, displayName } = action.payload;
+      state.peerDisplayNames[peerId] = displayName;
+      state.peerMuteStatus[peerId] = {
+        isMutedByHost: false,
+        personallyMutedBy: [],
+      };
+    },
+    removePeer: (state, action: PayloadAction<string>) => {
+      const peerId = action.payload;
+      const stream = state.remoteStreams[peerId];
+      if (stream) {
         stream.getTracks().forEach((track) => track.stop());
-      });
-      state.isCallActive = false;
-      state.roomId = null;
-      state.remoteStreams = {};
-      // 3. Reset display names on call end
-      state.peerDisplayNames = {};
+      }
+      delete state.remoteStreams[peerId];
+      delete state.peerDisplayNames[peerId];
+      delete state.peerMuteStatus[peerId];
     },
     addRemoteStream: (
       state,
@@ -40,23 +72,30 @@ const webrtcSlice = createSlice({
     ) => {
       state.remoteStreams[action.payload.peerId] = action.payload.stream;
     },
-    removeRemoteStream: (state, action: PayloadAction<string>) => {
-      const peerId = action.payload;
-      const stream = state.remoteStreams[peerId];
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-        delete state.remoteStreams[peerId];
-        // 4. Remove the display name when a peer leaves
-        delete state.peerDisplayNames[peerId];
+    // --- THIS IS THE FINAL CORRECTED LOGIC ---
+    togglePersonalMute: (
+      state,
+      action: PayloadAction<{ peerIdToMute: string; localPeerId: string }>
+    ) => {
+      const { peerIdToMute, localPeerId } = action.payload;
+      const status = state.peerMuteStatus[peerIdToMute];
+      if (status) {
+        const isMuted = status.personallyMutedBy.includes(localPeerId);
+
+        // Create a new array to guarantee an immutable update
+        const newMutedBy = isMuted
+          ? status.personallyMutedBy.filter((id) => id !== localPeerId)
+          : [...status.personallyMutedBy, localPeerId];
+
+        // Assign the new array back to the state
+        state.peerMuteStatus[peerIdToMute].personallyMutedBy = newMutedBy;
       }
     },
-    // 5. New action to set a display name for a peer
-    setPeerDisplayName: (
-      state,
-      action: PayloadAction<{ peerId: string; displayName: string }>
-    ) => {
-      state.peerDisplayNames[action.payload.peerId] =
-        action.payload.displayName;
+    setAllPeersMutedByHost: (state, action: PayloadAction<boolean>) => {
+      const isMuted = action.payload;
+      for (const peerId in state.peerMuteStatus) {
+        state.peerMuteStatus[peerId].isMutedByHost = isMuted;
+      }
     },
   },
 });
@@ -64,9 +103,14 @@ const webrtcSlice = createSlice({
 export const {
   callStarted,
   callEnded,
+  setMyId,
+  setIsHost,
+  setHostId,
+  addPeer,
+  removePeer,
   addRemoteStream,
-  removeRemoteStream,
-  setPeerDisplayName, // 6. Export the new action
+  togglePersonalMute,
+  setAllPeersMutedByHost,
 } = webrtcSlice.actions;
 
 export default webrtcSlice.reducer;

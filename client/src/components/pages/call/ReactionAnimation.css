@@ -1,0 +1,21 @@
+.reaction-bubble {
+  position: absolute;
+  bottom: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 3rem; /* 48px */
+  animation: floatUp 2s ease-out forwards;
+  pointer-events: none; /* Make it unclickable */
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.5); /* Add some depth */
+}
+
+@keyframes floatUp {
+  0% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-150px);
+  }
+}

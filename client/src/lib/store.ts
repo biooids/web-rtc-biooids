@@ -10,11 +10,14 @@ import { setupListeners } from "@reduxjs/toolkit/query";
 import authReducer from "./features/auth/authSlice";
 import userReducer from "./features/user/userSlice";
 import uploadProgressReducer from "./features/upload/uploadProgressSlice";
-import { authApiSlice } from "./features/auth/authApiSlice";
 import uiReducer from "./features/ui/uiSlice";
+import webrtcReducer from "./features/webrtc/webrtcSlice";
+import chatReducer from "./features/chat/chatSlice";
+import reactionsReducer from "./features/reactions/reactionsSlice"; // 1. Import
+
+import { authApiSlice } from "./features/auth/authApiSlice";
 import { userApiSlice } from "./features/user/userApiSlice";
 import { adminApiSlice } from "./features/admin/adminApiSlice";
-import webrtcReducer from "./features/webrtc/webrtcSlice"; // <-- 1. ADD THIS IMPORT
 
 export const store = configureStore({
   reducer: {
@@ -23,7 +26,9 @@ export const store = configureStore({
     user: userReducer,
     uploadProgress: uploadProgressReducer,
     ui: uiReducer,
-    webrtc: webrtcReducer, // <-- 2. ADD THIS LINE
+    webrtc: webrtcReducer,
+    chat: chatReducer,
+    reactions: reactionsReducer, // 2. Add reducer
 
     // RTK Query Reducers
     [userApiSlice.reducerPath]: userApiSlice.reducer,

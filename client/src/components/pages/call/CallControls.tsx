@@ -10,14 +10,17 @@ import {
   PhoneOff,
   Monitor,
   MonitorOff,
+  MessageSquare,
+  Users,
 } from "lucide-react";
 
 interface CallControlsProps {
   onLeave: () => void;
   localStream: MediaStream;
-  // Add new props for screen sharing
   onToggleScreenShare: () => void;
   isScreenSharing: boolean;
+  onToggleChat: () => void;
+  onToggleParticipants: () => void;
 }
 
 export default function CallControls({
@@ -25,6 +28,8 @@ export default function CallControls({
   localStream,
   onToggleScreenShare,
   isScreenSharing,
+  onToggleChat,
+  onToggleParticipants,
 }: CallControlsProps) {
   const [isMicMuted, setIsMicMuted] = useState(
     !localStream.getAudioTracks()[0]?.enabled
@@ -69,7 +74,6 @@ export default function CallControls({
         >
           {isCameraOff ? <VideoOff /> : <Video />}
         </Button>
-        {/* --- NEW BUTTON --- */}
         <Button
           onClick={onToggleScreenShare}
           variant="secondary"
@@ -77,6 +81,22 @@ export default function CallControls({
           className="rounded-full w-16 h-16"
         >
           {isScreenSharing ? <MonitorOff /> : <Monitor />}
+        </Button>
+        <Button
+          onClick={onToggleChat}
+          variant="secondary"
+          size="lg"
+          className="rounded-full w-16 h-16"
+        >
+          <MessageSquare />
+        </Button>
+        <Button
+          onClick={onToggleParticipants}
+          variant="secondary"
+          size="lg"
+          className="rounded-full w-16 h-16"
+        >
+          <Users />
         </Button>
         <Button
           onClick={onLeave}
