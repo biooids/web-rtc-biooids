@@ -1,35 +1,12 @@
 // FILE: src/lib/nav-links.ts
 
-import {
-  Home,
-  Settings,
-  User,
-  LayoutGrid,
-  Bookmark,
-  Compass,
-  PhoneCall,
-} from "lucide-react";
+import { Settings, User, PhoneCall, House } from "lucide-react";
 
 export const navLinks = [
   {
-    href: "/dashboard",
-    label: "Dashboard",
-    icon: Home,
-  },
-  {
-    href: "/explore",
-    label: "Explore",
-    icon: Compass,
-  },
-  {
-    href: "/saved",
-    label: "Saved Items",
-    icon: Bookmark,
-  },
-  {
-    href: "/posts",
-    label: "My Posts",
-    icon: LayoutGrid,
+    href: "/",
+    label: "Home",
+    icon: House, // Placeholder for a home icon
   },
   {
     href: "/profile",
