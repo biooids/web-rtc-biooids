@@ -1,4 +1,4 @@
-import { AppDispatch } from "@/lib/store";
+import { AppDispatch, store } from "@/lib/store";
 import {
   addPeer,
   addRemoteStream,
@@ -7,9 +7,12 @@ import {
   setAllPeersMutedByHost,
   setHostId,
   setIsHost,
+  setMyId,
+  togglePersonalMute,
+  updatePeerPersonalMute,
 } from "./webrtcSlice";
 import { addMessage, ChatMessage } from "../chat/chatSlice";
-import { showReaction } from "../reactions/reactionsSlice";
+import { showReaction } from "../reactions/reactionsSlice"; // --- FIX: Import the new thunk ---
 
 const STUN_SERVERS = {
   iceServers: [
@@ -40,34 +43,26 @@ export class WebRTCService {
     }&displayName=${encodeURIComponent(this.displayName)}`;
 
     this.ws = new WebSocket(wsUrl);
-    this.ws.onopen = () => console.log("[WebRTC] Signaling connection opened.");
     this.ws.onmessage = (event) => this.handleSignalingMessage(event);
-    this.ws.onclose = () =>
-      console.log("[WebRTC] Signaling connection closed.");
-    this.ws.onerror = (err) => console.error("[WebRTC] Signaling error:", err);
   }
 
   private async handleSignalingMessage(event: MessageEvent) {
     const message = JSON.parse(event.data);
-
     switch (message.type) {
       case "init":
         this.myId = message.payload.selfId;
-        // --- THIS IS THE FIX ---
-        // Dispatch actions with the correct payloads
+        if (this.myId) this.dispatch(setMyId(this.myId));
         this.dispatch(callStarted(this.roomId));
         this.dispatch(setIsHost(this.myId === message.payload.hostId));
         this.dispatch(setHostId(message.payload.hostId));
         this.dispatch(setAllPeersMutedByHost(message.payload.isRoomMuted));
-
-        for (const peer of message.payload.peers) {
+        message.payload.peers.forEach((peer: any) => {
           this.dispatch(
             addPeer({ peerId: peer.id, displayName: peer.displayName })
           );
           this.createAndSendOffer(peer.id);
-        }
+        });
         break;
-
       case "user-joined":
         this.dispatch(
           addPeer({
@@ -77,52 +72,76 @@ export class WebRTCService {
         );
         this.dispatch(setHostId(message.payload.hostId));
         break;
-
       case "user-disconnected":
         this.dispatch(removePeer(message.payload.peerId));
         this.dispatch(setHostId(message.payload.newHostId));
         this.closePeerConnection(message.payload.peerId);
         break;
-
+      case "personal-mute-toggle":
+        if (message.senderId !== this.myId) {
+          this.dispatch(updatePeerPersonalMute(message.payload));
+        }
+        break;
       case "all-peers-muted-state-changed":
         this.dispatch(setAllPeersMutedByHost(message.payload.isMuted));
         break;
-
       case "chat-message":
-        this.dispatch(addMessage(message as ChatMessage));
+        const chatMessage = {
+          senderName: message.senderName,
+          text: message.payload.text,
+          timestamp: message.payload.timestamp,
+        };
+        this.dispatch(addMessage(chatMessage as ChatMessage));
         break;
+
+      // --- FIX: Dispatch the showReaction thunk when a reaction is received ---
       case "reaction":
         this.dispatch(
           showReaction({
             peerId: message.senderId,
             emoji: message.payload.emoji,
-            id: Date.now(),
           })
         );
         break;
+
       case "request-mute-peer":
         const track = this.localStream?.getAudioTracks()[0];
-        if (track) {
-          track.enabled = false;
-        }
+        if (track) track.enabled = false;
         break;
-
       case "offer":
-        await this.handleOffer(message.senderId, message.payload.sdp);
+        this.handleOffer(message.senderId, message.payload.sdp);
         break;
       case "answer":
-        await this.handleAnswer(message.senderId, message.payload.sdp);
+        this.handleAnswer(message.senderId, message.payload.sdp);
         break;
       case "ice-candidate":
-        await this.handleIceCandidate(
-          message.senderId,
-          message.payload.candidate
-        );
+        this.handleIceCandidate(message.senderId, message.payload.candidate);
         break;
     }
   }
 
-  // All other methods below this line are correct and do not need to be changed.
+  public sendReaction(emoji: string) {
+    this.sendBroadcastMessage({ type: "reaction", payload: { emoji } });
+  }
+
+  // --- Other methods remain unchanged ---
+  public togglePersonalMute(peerIdToMute: string) {
+    if (!this.myId) return;
+    const webrtcState = store.getState().webrtc;
+    const isCurrentlyMuted = webrtcState.peerMuteStatus[
+      peerIdToMute
+    ]?.personallyMutedBy.includes(this.myId);
+    const newMuteState = !isCurrentlyMuted;
+    this.dispatch(togglePersonalMute({ peerIdToMute, localPeerId: this.myId }));
+    this.sendBroadcastMessage({
+      type: "personal-mute-toggle",
+      payload: {
+        mutedPeerId: peerIdToMute,
+        muterPeerId: this.myId,
+        isMuted: newMuteState,
+      },
+    });
+  }
   public hangUp() {
     this.peerConnections.forEach((pc) => pc.close());
     this.peerConnections.clear();
@@ -139,9 +158,6 @@ export class WebRTCService {
       type: "chat-message",
       payload: { text, timestamp: new Date().toISOString() },
     });
-  }
-  public sendReaction(emoji: string) {
-    this.sendBroadcastMessage({ type: "reaction", payload: { emoji } });
   }
   public requestMutePeer(peerId: string) {
     this.sendMessage({
@@ -186,11 +202,7 @@ export class WebRTCService {
     pc.ontrack = (e) =>
       this.dispatch(addRemoteStream({ peerId, stream: e.streams[0] }));
     pc.onconnectionstatechange = () => {
-      if (
-        pc.connectionState === "disconnected" ||
-        pc.connectionState === "closed" ||
-        pc.connectionState === "failed"
-      )
+      if (["disconnected", "closed", "failed"].includes(pc.connectionState))
         this.closePeerConnection(peerId);
     };
     this.peerConnections.set(peerId, pc);

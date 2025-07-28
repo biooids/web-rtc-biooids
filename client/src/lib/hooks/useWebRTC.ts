@@ -2,88 +2,54 @@ import { useEffect, useRef, useCallback } from "react";
 import { useAppDispatch, useAppSelector } from "./hooks";
 import { WebRTCService } from "../features/webrtc/WebRTCService";
 import { callEnded } from "../features/webrtc/webrtcSlice";
+import { clearChat } from "../features/chat/chatSlice";
 
 export const useWebRTC = (
   roomId: string,
   displayName: string,
-  localStream: MediaStream | null
+  localStream: MediaStream
 ) => {
   const dispatch = useAppDispatch();
-  const {
-    myId, // Get myId from the store
-    remoteStreams,
-    isCallActive,
-    peerDisplayNames,
-    isHost,
-    hostId,
-    peerMuteStatus,
-  } = useAppSelector((state) => state.webrtc);
-
-  const rtcServiceRef = useRef<WebRTCService | null>(null);
-
-  const replaceTrack = useCallback(async (newTrack: MediaStreamTrack) => {
-    if (rtcServiceRef.current) {
-      await rtcServiceRef.current.replaceTrack(newTrack);
-    }
-  }, []);
-
-  const leaveCall = useCallback(() => {
-    if (rtcServiceRef.current) {
-      rtcServiceRef.current.hangUp();
-      dispatch(callEnded());
-      rtcServiceRef.current = null;
-    }
-  }, [dispatch]);
-
-  const sendChatMessage = useCallback((message: string) => {
-    if (rtcServiceRef.current) {
-      rtcServiceRef.current.sendChatMessage(message);
-    }
-  }, []);
-
-  const sendReaction = useCallback((emoji: string) => {
-    if (rtcServiceRef.current) {
-      rtcServiceRef.current.sendReaction(emoji);
-    }
-  }, []);
-
-  const requestMutePeer = useCallback((peerId: string) => {
-    if (rtcServiceRef.current) {
-      rtcServiceRef.current.requestMutePeer(peerId);
-    }
-  }, []);
-
-  const toggleMuteAll = useCallback((isMuted: boolean) => {
-    if (rtcServiceRef.current) {
-      rtcServiceRef.current.toggleMuteAll(isMuted);
-    }
-  }, []);
+  const webrtcState = useAppSelector((state) => state.webrtc);
+  const webrtcServiceRef = useRef<WebRTCService | null>(null);
 
   useEffect(() => {
-    if (!localStream || !displayName) {
-      return;
-    }
     const service = new WebRTCService(roomId, displayName, dispatch);
-    rtcServiceRef.current = service;
+    webrtcServiceRef.current = service;
     service.start(localStream);
     return () => {
-      leaveCall();
+      service.hangUp();
+      dispatch(callEnded());
+      dispatch(clearChat());
     };
-  }, [roomId, localStream, displayName, dispatch, leaveCall]);
+  }, [roomId, displayName, localStream, dispatch]);
+
+  const leaveCall = useCallback(() => webrtcServiceRef.current?.hangUp(), []);
+  const replaceTrack = useCallback(async (track: MediaStreamTrack) => {
+    await webrtcServiceRef.current?.replaceTrack(track);
+  }, []);
+  const sendChatMessage = useCallback((message: string) => {
+    webrtcServiceRef.current?.sendChatMessage(message);
+  }, []);
+  const sendReaction = useCallback((emoji: string) => {
+    webrtcServiceRef.current?.sendReaction(emoji);
+  }, []);
+  const toggleMuteAll = useCallback((isMuted: boolean) => {
+    webrtcServiceRef.current?.toggleMuteAll(isMuted);
+  }, []);
+
+  // --- FIX: Expose the service method to the UI ---
+  const togglePersonalMute = useCallback((peerId: string) => {
+    webrtcServiceRef.current?.togglePersonalMute(peerId);
+  }, []);
 
   return {
-    myId, // Return myId
-    remoteStreams,
-    isCallActive,
-    peerDisplayNames,
-    isHost,
-    hostId,
-    peerMuteStatus,
+    ...webrtcState,
     leaveCall,
     replaceTrack,
     sendChatMessage,
     sendReaction,
-    requestMutePeer,
     toggleMuteAll,
+    togglePersonalMute,
   };
 };

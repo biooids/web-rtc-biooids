@@ -1,9 +1,8 @@
 "use client";
 
 import React from "react";
-import { useAppDispatch, useAppSelector } from "@/lib/hooks/hooks";
-import { togglePersonalMute } from "@/lib/features/webrtc/webrtcSlice";
-import { User, Users, MicOff, VolumeX, Volume2 } from "lucide-react";
+import { useAppSelector } from "@/lib/hooks/hooks";
+import { User, Users, VolumeX, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -12,6 +11,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+// --- FIX: Update props interface ---
 interface ParticipantListProps {
   localDisplayName: string;
   isHost: boolean;
@@ -19,6 +19,7 @@ interface ParticipantListProps {
   localPeerId: string | null;
   onToggleMuteAll: () => void;
   areAllMuted: boolean;
+  onTogglePersonalMute: (peerId: string) => void;
 }
 
 export default function ParticipantList({
@@ -28,37 +29,18 @@ export default function ParticipantList({
   localPeerId,
   onToggleMuteAll,
   areAllMuted,
+  onTogglePersonalMute,
 }: ParticipantListProps) {
-  const dispatch = useAppDispatch();
   const { peerDisplayNames, peerMuteStatus } = useAppSelector(
     (state) => state.webrtc
   );
   const participantCount = 1 + Object.keys(peerDisplayNames).length;
 
-  // --- DEBUG LOG ---
-  // This will show us if the component is re-rendering with new data.
-  console.log(
-    "[ParticipantList] Re-rendering with peerMuteStatus:",
-    JSON.stringify(peerMuteStatus)
-  );
-
-  const handleTogglePersonalMute = (peerIdToMute: string) => {
-    // --- DEBUG LOG ---
-    // This will confirm the button click is working.
-    console.log(
-      `[ParticipantList] Dispatching togglePersonalMute for peer: ${peerIdToMute}`
-    );
-    if (localPeerId) {
-      dispatch(togglePersonalMute({ peerIdToMute, localPeerId }));
-    }
-  };
-
   return (
     <div className="w-80 h-full bg-card border-l flex flex-col">
       <div className="p-4 border-b">
         <h3 className="font-semibold text-center flex items-center justify-center gap-2">
-          <Users className="w-5 h-5" />
-          Participants ({participantCount})
+          <Users className="w-5 h-5" /> Participants ({participantCount})
         </h3>
       </div>
       <div className="flex-1 p-4 overflow-y-auto">
@@ -91,10 +73,11 @@ export default function ParticipantList({
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
+                        {/* --- FIX: Call the prop function directly --- */}
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleTogglePersonalMute(peerId)}
+                          onClick={() => onTogglePersonalMute(peerId)}
                         >
                           {isPersonallyMuted ? (
                             <VolumeX className="w-4 h-4 text-destructive" />

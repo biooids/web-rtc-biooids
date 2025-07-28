@@ -1,20 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-
-export interface MuteStatus {
-  isMutedByHost: boolean;
-  personallyMutedBy: string[];
-}
-
-export interface WebRTCState {
-  isCallActive: boolean;
-  roomId: string | null;
-  myId: string | null;
-  isHost: boolean;
-  hostId: string | null;
-  remoteStreams: Record<string, MediaStream>;
-  peerDisplayNames: Record<string, string>;
-  peerMuteStatus: Record<string, MuteStatus>;
-}
+import { WebRTCState, PeerMutePayload } from "./webrtcTypes";
 
 const initialState: WebRTCState = {
   isCallActive: false,
@@ -51,10 +36,12 @@ const webrtcSlice = createSlice({
     ) => {
       const { peerId, displayName } = action.payload;
       state.peerDisplayNames[peerId] = displayName;
-      state.peerMuteStatus[peerId] = {
-        isMutedByHost: false,
-        personallyMutedBy: [],
-      };
+      if (!state.peerMuteStatus[peerId]) {
+        state.peerMuteStatus[peerId] = {
+          isMutedByHost: false,
+          personallyMutedBy: [],
+        };
+      }
     },
     removePeer: (state, action: PayloadAction<string>) => {
       const peerId = action.payload;
@@ -72,7 +59,6 @@ const webrtcSlice = createSlice({
     ) => {
       state.remoteStreams[action.payload.peerId] = action.payload.stream;
     },
-    // --- THIS IS THE FINAL CORRECTED LOGIC ---
     togglePersonalMute: (
       state,
       action: PayloadAction<{ peerIdToMute: string; localPeerId: string }>
@@ -80,21 +66,30 @@ const webrtcSlice = createSlice({
       const { peerIdToMute, localPeerId } = action.payload;
       const status = state.peerMuteStatus[peerIdToMute];
       if (status) {
-        const isMuted = status.personallyMutedBy.includes(localPeerId);
-
-        // Create a new array to guarantee an immutable update
-        const newMutedBy = isMuted
-          ? status.personallyMutedBy.filter((id) => id !== localPeerId)
-          : [...status.personallyMutedBy, localPeerId];
-
-        // Assign the new array back to the state
-        state.peerMuteStatus[peerIdToMute].personallyMutedBy = newMutedBy;
+        const index = status.personallyMutedBy.indexOf(localPeerId);
+        if (index > -1) {
+          status.personallyMutedBy.splice(index, 1);
+        } else {
+          status.personallyMutedBy.push(localPeerId);
+        }
+      }
+    },
+    // --- FIX: Added reducer to handle incoming mute events from other peers ---
+    updatePeerPersonalMute: (state, action: PayloadAction<PeerMutePayload>) => {
+      const { mutedPeerId, muterPeerId, isMuted } = action.payload;
+      const status = state.peerMuteStatus[mutedPeerId];
+      if (status) {
+        const index = status.personallyMutedBy.indexOf(muterPeerId);
+        if (isMuted && index === -1) {
+          status.personallyMutedBy.push(muterPeerId);
+        } else if (!isMuted && index > -1) {
+          status.personallyMutedBy.splice(index, 1);
+        }
       }
     },
     setAllPeersMutedByHost: (state, action: PayloadAction<boolean>) => {
-      const isMuted = action.payload;
       for (const peerId in state.peerMuteStatus) {
-        state.peerMuteStatus[peerId].isMutedByHost = isMuted;
+        state.peerMuteStatus[peerId].isMutedByHost = action.payload;
       }
     },
   },
@@ -110,6 +105,7 @@ export const {
   removePeer,
   addRemoteStream,
   togglePersonalMute,
+  updatePeerPersonalMute,
   setAllPeersMutedByHost,
 } = webrtcSlice.actions;
 
