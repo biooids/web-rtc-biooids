@@ -1,18 +1,19 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
-// Define the shape of the WebRTC state
 export interface WebRTCState {
   isCallActive: boolean;
   roomId: string | null;
-  localStream: MediaStream | null; // This is useful for UI but not managed here
-  remoteStreams: Record<string, MediaStream>; // Keyed by peerId
+  remoteStreams: Record<string, MediaStream>;
+  // 1. Add a map for peer display names
+  peerDisplayNames: Record<string, string>;
 }
 
 const initialState: WebRTCState = {
   isCallActive: false,
   roomId: null,
-  localStream: null,
   remoteStreams: {},
+  // 2. Initialize the empty map
+  peerDisplayNames: {},
 };
 
 const webrtcSlice = createSlice({
@@ -24,18 +25,14 @@ const webrtcSlice = createSlice({
       state.roomId = action.payload;
     },
     callEnded: (state) => {
-      // Stop tracks for all remote streams before clearing them
       Object.values(state.remoteStreams).forEach((stream) => {
         stream.getTracks().forEach((track) => track.stop());
       });
       state.isCallActive = false;
       state.roomId = null;
       state.remoteStreams = {};
-    },
-    setLocalStream: (state, action: PayloadAction<MediaStream | null>) => {
-      // Note: Storing MediaStream in Redux is generally discouraged
-      // but can be acceptable for simple use cases like this.
-      state.localStream = action.payload;
+      // 3. Reset display names on call end
+      state.peerDisplayNames = {};
     },
     addRemoteStream: (
       state,
@@ -49,7 +46,17 @@ const webrtcSlice = createSlice({
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
         delete state.remoteStreams[peerId];
+        // 4. Remove the display name when a peer leaves
+        delete state.peerDisplayNames[peerId];
       }
+    },
+    // 5. New action to set a display name for a peer
+    setPeerDisplayName: (
+      state,
+      action: PayloadAction<{ peerId: string; displayName: string }>
+    ) => {
+      state.peerDisplayNames[action.payload.peerId] =
+        action.payload.displayName;
     },
   },
 });
@@ -57,9 +64,9 @@ const webrtcSlice = createSlice({
 export const {
   callStarted,
   callEnded,
-  setLocalStream,
   addRemoteStream,
   removeRemoteStream,
+  setPeerDisplayName, // 6. Export the new action
 } = webrtcSlice.actions;
 
 export default webrtcSlice.reducer;

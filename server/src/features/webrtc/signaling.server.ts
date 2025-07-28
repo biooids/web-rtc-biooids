@@ -2,21 +2,22 @@ import { WebSocketServer, WebSocket } from "ws";
 import { Server as HttpServer } from "http";
 import { v4 as uuidv4 } from "uuid";
 
-const rooms = new Map<string, Map<string, WebSocket>>();
+interface Client {
+  ws: WebSocket;
+  displayName: string;
+}
 
-/**
- * Initializes the WebSocket signaling server and attaches it to your main HTTP server.
- * @param httpServer The main HTTP server instance from your application.
- */
+const rooms = new Map<string, Map<string, Client>>();
+
 export const initSignalingServer = (httpServer: HttpServer) => {
   const wss = new WebSocketServer({ server: httpServer });
 
   wss.on("connection", (ws: WebSocket, req) => {
     const url = new URL(req.url || "", `ws://${req.headers.host}`);
     const roomId = url.searchParams.get("roomId");
+    const displayName = url.searchParams.get("displayName") || "Guest";
 
     if (!roomId) {
-      console.log("[Signal] Connection rejected: Missing roomId");
       ws.close(1008, "Room ID is required.");
       return;
     }
@@ -26,20 +27,30 @@ export const initSignalingServer = (httpServer: HttpServer) => {
     }
     const room = rooms.get(roomId)!;
     const clientId = uuidv4();
-    room.set(clientId, ws);
-    console.log(`[Signal] Client ${clientId} connected to room ${roomId}`);
+    room.set(clientId, { ws, displayName });
+    console.log(
+      `[Signal] Client ${clientId} (${displayName}) connected to room ${roomId}`
+    );
 
-    // Send the new client its ID. It will wait for existing peers to call it.
-    ws.send(JSON.stringify({ type: "init", payload: { selfId: clientId } }));
+    // --- FIX IS HERE ---
+    // 1. Get the list of all peers already in the room.
+    const peers = Array.from(room.entries())
+      .filter(([id]) => id !== clientId) // Exclude the new client itself
+      .map(([id, client]) => ({ id, displayName: client.displayName }));
 
-    // Announce the new client to everyone else. They will be responsible for initiating the call.
+    // 2. Send the 'init' message with the list of peers to the new client.
+    ws.send(
+      JSON.stringify({ type: "init", payload: { selfId: clientId, peers } })
+    );
+
+    // Announce the new client to all existing peers. They will initiate the calls.
     const joinedMessage = JSON.stringify({
       type: "user-joined",
-      payload: { peerId: clientId },
+      payload: { peerId: clientId, displayName },
     });
-    room.forEach((peerWs, peerId) => {
-      if (peerId !== clientId && peerWs.readyState === WebSocket.OPEN) {
-        peerWs.send(joinedMessage);
+    room.forEach((peer, peerId) => {
+      if (peerId !== clientId && peer.ws.readyState === WebSocket.OPEN) {
+        peer.ws.send(joinedMessage);
       }
     });
 
@@ -47,10 +58,11 @@ export const initSignalingServer = (httpServer: HttpServer) => {
       try {
         const message = JSON.parse(rawMessage.toString());
         message.senderId = clientId;
-
-        const targetWs = message.targetId ? room.get(message.targetId) : null;
-        if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-          targetWs.send(JSON.stringify(message));
+        const targetClient = message.targetId
+          ? room.get(message.targetId)
+          : null;
+        if (targetClient && targetClient.ws.readyState === WebSocket.OPEN) {
+          targetClient.ws.send(JSON.stringify(message));
         }
       } catch (error) {
         console.error(
@@ -61,26 +73,22 @@ export const initSignalingServer = (httpServer: HttpServer) => {
     });
 
     ws.on("close", () => {
-      console.log(
-        `[Signal] Client ${clientId} disconnected from room ${roomId}`
-      );
+      console.log(`[Signal] Client ${clientId} (${displayName}) disconnected`);
       room.delete(clientId);
-
       if (room.size === 0) {
         rooms.delete(roomId);
-        console.log(`[Signal] Room ${roomId} is empty and has been removed.`);
       } else {
         const leftMessage = JSON.stringify({
           type: "user-disconnected",
           payload: { peerId: clientId },
         });
-        room.forEach((peerWs) => peerWs.send(leftMessage));
+        room.forEach((peer) => peer.ws.send(leftMessage));
       }
     });
 
-    ws.on("error", (error) => {
-      console.error(`[Signal] WebSocket error for client ${clientId}:`, error);
-    });
+    ws.on("error", (error) =>
+      console.error(`[Signal] WebSocket error for client ${clientId}:`, error)
+    );
   });
 
   console.log("✅ WebRTC Signaling Server has been initialized.");

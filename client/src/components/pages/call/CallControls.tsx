@@ -1,22 +1,31 @@
-//src/components/pages/call/CallControls.tsx
-
 "use client";
 
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Video, VideoOff, PhoneOff } from "lucide-react";
+import {
+  Mic,
+  MicOff,
+  Video,
+  VideoOff,
+  PhoneOff,
+  Monitor,
+  MonitorOff,
+} from "lucide-react";
 
-// --- FIX: Add the localStream prop to the interface ---
 interface CallControlsProps {
   onLeave: () => void;
   localStream: MediaStream;
+  // Add new props for screen sharing
+  onToggleScreenShare: () => void;
+  isScreenSharing: boolean;
 }
 
 export default function CallControls({
   onLeave,
   localStream,
+  onToggleScreenShare,
+  isScreenSharing,
 }: CallControlsProps) {
-  // We can now derive the initial state from the stream's tracks
   const [isMicMuted, setIsMicMuted] = useState(
     !localStream.getAudioTracks()[0]?.enabled
   );
@@ -24,11 +33,6 @@ export default function CallControls({
     !localStream.getVideoTracks()[0]?.enabled
   );
 
-  const handleLeaveCall = () => {
-    onLeave();
-  };
-
-  // The toggle functions can now control the actual stream
   const toggleMic = () => {
     const audioTrack = localStream.getAudioTracks()[0];
     if (audioTrack) {
@@ -61,11 +65,21 @@ export default function CallControls({
           variant="secondary"
           size="lg"
           className="rounded-full w-16 h-16"
+          disabled={isScreenSharing}
         >
           {isCameraOff ? <VideoOff /> : <Video />}
         </Button>
+        {/* --- NEW BUTTON --- */}
         <Button
-          onClick={handleLeaveCall}
+          onClick={onToggleScreenShare}
+          variant="secondary"
+          size="lg"
+          className="rounded-full w-16 h-16"
+        >
+          {isScreenSharing ? <MonitorOff /> : <Monitor />}
+        </Button>
+        <Button
+          onClick={onLeave}
           variant="destructive"
           size="lg"
           className="rounded-full w-16 h-16"

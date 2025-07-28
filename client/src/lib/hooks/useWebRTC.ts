@@ -3,12 +3,22 @@ import { useAppDispatch, useAppSelector } from "./hooks";
 import { WebRTCService } from "../features/webrtc/WebRTCService";
 import { callStarted, callEnded } from "../features/webrtc/webrtcSlice";
 
-export const useWebRTC = (roomId: string, localStream: MediaStream | null) => {
+export const useWebRTC = (
+  roomId: string,
+  displayName: string,
+  localStream: MediaStream | null
+) => {
   const dispatch = useAppDispatch();
-  const { remoteStreams, isCallActive } = useAppSelector(
+  const { remoteStreams, isCallActive, peerDisplayNames } = useAppSelector(
     (state) => state.webrtc
   );
   const rtcServiceRef = useRef<WebRTCService | null>(null);
+
+  const replaceTrack = useCallback(async (newTrack: MediaStreamTrack) => {
+    if (rtcServiceRef.current) {
+      await rtcServiceRef.current.replaceTrack(newTrack);
+    }
+  }, []);
 
   const leaveCall = useCallback(() => {
     if (rtcServiceRef.current) {
@@ -19,15 +29,13 @@ export const useWebRTC = (roomId: string, localStream: MediaStream | null) => {
   }, [dispatch]);
 
   useEffect(() => {
-    // Only start the connection if we have a local stream.
-    if (!localStream) {
+    if (!localStream || !displayName) {
       return;
     }
 
-    const service = new WebRTCService(roomId, dispatch);
+    const service = new WebRTCService(roomId, displayName, dispatch);
     rtcServiceRef.current = service;
 
-    // Start the service and update Redux state
     service
       .start(localStream)
       .then(() => {
@@ -37,11 +45,16 @@ export const useWebRTC = (roomId: string, localStream: MediaStream | null) => {
         console.error("Failed to start WebRTC service:", error);
       });
 
-    // The cleanup function will be called when the component unmounts.
     return () => {
       leaveCall();
     };
-  }, [roomId, localStream, dispatch, leaveCall]);
+  }, [roomId, localStream, displayName, dispatch, leaveCall]);
 
-  return { remoteStreams, isCallActive, leaveCall };
+  return {
+    remoteStreams,
+    isCallActive,
+    peerDisplayNames,
+    leaveCall,
+    replaceTrack,
+  };
 };

@@ -1,5 +1,9 @@
 import { AppDispatch } from "@/lib/store";
-import { addRemoteStream, removeRemoteStream } from "./webrtcSlice";
+import {
+  addRemoteStream,
+  removeRemoteStream,
+  setPeerDisplayName,
+} from "./webrtcSlice";
 
 const STUN_SERVERS = {
   iceServers: [
@@ -14,16 +18,20 @@ export class WebRTCService {
   private localStream: MediaStream | null = null;
   private myId: string | null = null;
   private roomId: string;
+  private displayName: string;
   private dispatch: AppDispatch;
 
-  constructor(roomId: string, dispatch: AppDispatch) {
+  constructor(roomId: string, displayName: string, dispatch: AppDispatch) {
     this.roomId = roomId;
+    this.displayName = displayName;
     this.dispatch = dispatch;
   }
 
   public async start(stream: MediaStream) {
     this.localStream = stream;
-    const wsUrl = `${process.env.NEXT_PUBLIC_BACKEND_WEBSOCKET_URL}?roomId=${this.roomId}`;
+    const wsUrl = `${process.env.NEXT_PUBLIC_BACKEND_WEBSOCKET_URL}?roomId=${
+      this.roomId
+    }&displayName=${encodeURIComponent(this.displayName)}`;
 
     this.ws = new WebSocket(wsUrl);
     this.ws.onopen = () => console.log("[WebRTC] Signaling connection opened.");
@@ -40,26 +48,52 @@ export class WebRTCService {
     console.log("[WebRTC] Hung up all connections.");
   }
 
+  public async replaceTrack(newTrack: MediaStreamTrack) {
+    for (const pc of this.peerConnections.values()) {
+      const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+      if (sender) {
+        await sender.replaceTrack(newTrack);
+        console.log("[WebRTC] Video track replaced for a peer.");
+      }
+    }
+  }
+
   private async handleSignalingMessage(event: MessageEvent) {
     const message = JSON.parse(event.data);
 
     switch (message.type) {
       case "init":
-        // The client learns its own ID and waits for others to call.
+        // --- FIX IS HERE ---
+        // The client learns its ID and gets the names of everyone already present.
         this.myId = message.payload.selfId;
-        console.log(`[WebRTC] Initialized with ID: ${this.myId}`);
+        console.log(
+          `[WebRTC] Initialized with ID: ${this.myId}. Found ${message.payload.peers.length} existing peers.`
+        );
+        for (const peer of message.payload.peers) {
+          this.dispatch(
+            setPeerDisplayName({
+              peerId: peer.id,
+              displayName: peer.displayName,
+            })
+          );
+        }
         break;
 
       case "user-joined":
         // An existing client is told a new user has joined, so it sends an offer.
         console.log(
-          `[WebRTC] User ${message.payload.peerId} joined. Sending offer.`
+          `[WebRTC] User ${message.payload.displayName} joined. Sending offer.`
+        );
+        this.dispatch(
+          setPeerDisplayName({
+            peerId: message.payload.peerId,
+            displayName: message.payload.displayName,
+          })
         );
         this.createAndSendOffer(message.payload.peerId);
         break;
 
       case "offer":
-        // A new client receives an offer from an existing client.
         console.log(`[WebRTC] Received offer from ${message.senderId}`);
         await this.handleOffer(message.senderId, message.payload.sdp);
         break;

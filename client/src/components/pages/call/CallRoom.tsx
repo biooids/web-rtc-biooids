@@ -1,50 +1,92 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useCallback } from "react";
 import { useWebRTC } from "@/lib/hooks/useWebRTC";
 import VideoPlayer from "./VideoPlayer";
 import CallControls from "./CallControls";
-import { Loader2, Grid, UserSquare, PanelLeft } from "lucide-react"; // 1. Import new icon
+import { Loader2, Grid, UserSquare, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface CallRoomProps {
   roomId: string;
+  displayName: string;
   localStream: MediaStream;
   onLeave: () => void;
 }
 
 export default function CallRoom({
   roomId,
+  displayName,
   localStream,
   onLeave,
 }: CallRoomProps) {
-  const { remoteStreams, leaveCall, isCallActive } = useWebRTC(
-    roomId,
-    localStream
-  );
+  const {
+    remoteStreams,
+    isCallActive,
+    peerDisplayNames,
+    leaveCall,
+    replaceTrack,
+  } = useWebRTC(roomId, displayName, localStream);
 
-  // 2. Add 'sidebar' to the possible layout types
   const [layout, setLayout] = useState<"grid" | "featured" | "sidebar">("grid");
   const [featuredPeerId, setFeaturedPeerId] = useState<string>("local");
-
-  const allStreams = useMemo(
-    () => [
-      { stream: localStream, peerId: "local" },
-      ...Object.entries(remoteStreams).map(([peerId, stream]) => ({
-        peerId,
-        stream,
-      })),
-    ],
-    [localStream, remoteStreams]
-  );
-
-  const featuredStream = allStreams.find((s) => s.peerId === featuredPeerId);
-  const otherStreams = allStreams.filter((s) => s.peerId !== featuredPeerId);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
 
   const handleLeave = () => {
     leaveCall();
     onLeave();
   };
+
+  const handleToggleScreenShare = useCallback(async () => {
+    if (isScreenSharing) {
+      if (cameraTrackRef.current) {
+        localStream.getVideoTracks()[0].stop();
+        await replaceTrack(cameraTrackRef.current);
+        localStream.removeTrack(localStream.getVideoTracks()[0]);
+        localStream.addTrack(cameraTrackRef.current);
+        setIsScreenSharing(false);
+      }
+    } else {
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      });
+      if (!screenStream) return;
+
+      const screenTrack = screenStream.getVideoTracks()[0];
+      cameraTrackRef.current = localStream.getVideoTracks()[0];
+
+      await replaceTrack(screenTrack);
+      localStream.removeTrack(cameraTrackRef.current);
+      localStream.addTrack(screenTrack);
+      setIsScreenSharing(true);
+
+      screenTrack.onended = () => {
+        if (cameraTrackRef.current) {
+          replaceTrack(cameraTrackRef.current);
+          localStream.removeTrack(screenTrack);
+          localStream.addTrack(cameraTrackRef.current);
+          setIsScreenSharing(false);
+        }
+      };
+    }
+  }, [isScreenSharing, localStream, replaceTrack]);
+
+  const allStreams = useMemo(
+    () => [
+      { stream: localStream, peerId: "local", displayName: displayName },
+      ...Object.entries(remoteStreams).map(([peerId, stream]) => ({
+        peerId,
+        stream,
+        displayName: peerDisplayNames[peerId] || "Guest",
+      })),
+    ],
+    [localStream, remoteStreams, displayName, peerDisplayNames]
+  );
+
+  const featuredStream = allStreams.find((s) => s.peerId === featuredPeerId);
+  const otherStreams = allStreams.filter((s) => s.peerId !== featuredPeerId);
 
   if (!isCallActive) {
     return (
@@ -73,7 +115,6 @@ export default function CallRoom({
           >
             <UserSquare className="w-5 h-5" />
           </Button>
-          {/* 3. Add button for the new layout */}
           <Button
             variant={layout === "sidebar" ? "secondary" : "ghost"}
             size="icon"
@@ -84,13 +125,12 @@ export default function CallRoom({
         </div>
       </div>
 
-      {/* 4. Update rendering logic with the new 'sidebar' case */}
       <div className="flex-1 flex flex-col p-4">
         {(() => {
           if (layout === "grid") {
             return (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 flex-1">
-                {allStreams.map(({ stream, peerId }) => (
+                {allStreams.map(({ stream, peerId, displayName }) => (
                   <div
                     key={peerId}
                     className="relative rounded-lg overflow-hidden cursor-pointer"
@@ -99,7 +139,11 @@ export default function CallRoom({
                       setLayout("featured");
                     }}
                   >
-                    <VideoPlayer stream={stream} isMuted={peerId === "local"} />
+                    <VideoPlayer
+                      stream={stream}
+                      isMuted={peerId === "local"}
+                      displayName={displayName}
+                    />
                   </div>
                 ))}
               </div>
@@ -112,11 +156,12 @@ export default function CallRoom({
                     <VideoPlayer
                       stream={featuredStream.stream}
                       isMuted={featuredStream.peerId === "local"}
+                      displayName={featuredStream.displayName}
                     />
                   )}
                 </div>
                 <div className="flex justify-center gap-4 pt-4">
-                  {otherStreams.map(({ stream, peerId }) => (
+                  {otherStreams.map(({ stream, peerId, displayName }) => (
                     <div
                       key={peerId}
                       className="w-48 h-28 relative rounded-lg overflow-hidden cursor-pointer"
@@ -125,6 +170,7 @@ export default function CallRoom({
                       <VideoPlayer
                         stream={stream}
                         isMuted={peerId === "local"}
+                        displayName={displayName}
                       />
                     </div>
                   ))}
@@ -139,11 +185,12 @@ export default function CallRoom({
                     <VideoPlayer
                       stream={featuredStream.stream}
                       isMuted={featuredStream.peerId === "local"}
+                      displayName={featuredStream.displayName}
                     />
                   )}
                 </div>
                 <div className="flex flex-col gap-4 w-48">
-                  {otherStreams.map(({ stream, peerId }) => (
+                  {otherStreams.map(({ stream, peerId, displayName }) => (
                     <div
                       key={peerId}
                       className="w-full aspect-video relative rounded-lg overflow-hidden cursor-pointer"
@@ -152,6 +199,7 @@ export default function CallRoom({
                       <VideoPlayer
                         stream={stream}
                         isMuted={peerId === "local"}
+                        displayName={displayName}
                       />
                     </div>
                   ))}
@@ -163,7 +211,12 @@ export default function CallRoom({
       </div>
 
       <div className="mt-auto px-4 pb-4">
-        <CallControls onLeave={handleLeave} localStream={localStream} />
+        <CallControls
+          onLeave={handleLeave}
+          localStream={localStream}
+          onToggleScreenShare={handleToggleScreenShare}
+          isScreenSharing={isScreenSharing}
+        />
       </div>
     </div>
   );

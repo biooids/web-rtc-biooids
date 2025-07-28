@@ -15,19 +15,18 @@ import { Video, VideoOff, Mic, MicOff, Copy, ArrowRight } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface LobbyProps {
-  onJoin: (roomId: string, stream: MediaStream) => void;
+  onJoin: (roomId: string, displayName: string, stream: MediaStream) => void;
 }
 
 export default function Lobby({ onJoin }: LobbyProps) {
   const [roomId, setRoomId] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [isMicMuted, setIsMicMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    // This effect now only gets the media and does not clean it up.
-    // The parent page will handle cleanup.
     const getMedia = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -44,7 +43,7 @@ export default function Lobby({ onJoin }: LobbyProps) {
       }
     };
     getMedia();
-  }, []); // The empty array ensures this runs only once.
+  }, []);
 
   const toggleCamera = () => {
     if (localStream) {
@@ -70,6 +69,10 @@ export default function Lobby({ onJoin }: LobbyProps) {
   };
 
   const handleJoin = () => {
+    if (!displayName.trim()) {
+      toast.error("Please enter a display name.");
+      return;
+    }
     if (!roomId.trim()) {
       toast.error("Please enter a Room ID.");
       return;
@@ -78,7 +81,7 @@ export default function Lobby({ onJoin }: LobbyProps) {
       toast.error("Could not access camera. Please check permissions.");
       return;
     }
-    onJoin(roomId, localStream);
+    onJoin(roomId, displayName, localStream);
   };
 
   return (
@@ -126,6 +129,12 @@ export default function Lobby({ onJoin }: LobbyProps) {
             </div>
           </div>
           <div className="space-y-4">
+            <Input
+              placeholder="Enter your name"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              className="text-center"
+            />
             <div className="flex gap-2">
               <Input
                 placeholder="Enter Room ID"
@@ -136,6 +145,7 @@ export default function Lobby({ onJoin }: LobbyProps) {
                 <Copy className="h-4 w-4 mr-2" /> Generate
               </Button>
             </div>
+
             <Button onClick={handleJoin} className="w-full">
               Join Call <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
