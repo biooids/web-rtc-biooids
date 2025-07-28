@@ -18,4 +18,7 @@ export interface WebRTCState {
   remoteStreams: Record<string, MediaStream>;
   peerDisplayNames: Record<string, string>;
   peerMuteStatus: Record<string, MuteStatus>;
+  unmuteRequestReceived: boolean;
+  isRoomMutedByHost: boolean;
+  allowedToSpeak: string[];
 }

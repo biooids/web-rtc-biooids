@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useAppSelector } from "@/lib/hooks/hooks";
-import { User, Users, VolumeX, Volume2 } from "lucide-react";
+import { User, Users, VolumeX, Volume2, Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -20,6 +20,8 @@ interface ParticipantListProps {
   onToggleMuteAll: () => void;
   areAllMuted: boolean;
   onTogglePersonalMute: (peerId: string) => void;
+  onRequestUnmute: (peerId: string) => void;
+  onForceMute: (peerId: string) => void;
 }
 
 export default function ParticipantList({
@@ -30,11 +32,63 @@ export default function ParticipantList({
   onToggleMuteAll,
   areAllMuted,
   onTogglePersonalMute,
+  onRequestUnmute,
+  onForceMute,
 }: ParticipantListProps) {
-  const { peerDisplayNames, peerMuteStatus } = useAppSelector(
+  const { peerDisplayNames, peerMuteStatus, allowedToSpeak } = useAppSelector(
     (state) => state.webrtc
   );
   const participantCount = 1 + Object.keys(peerDisplayNames).length;
+
+  const HostControl = ({ peerId }: { peerId: string }) => {
+    if (!isHost || !peerMuteStatus[peerId]?.isMutedByHost) {
+      return null;
+    }
+
+    const isAllowed = allowedToSpeak.includes(peerId);
+
+    if (isAllowed) {
+      // --- FIX: Show "Force Mute" button if user is allowed to speak ---
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onForceMute(peerId)}
+              >
+                <MicOff className="w-4 h-4 text-destructive" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Mute this participant</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    } else {
+      // --- FIX: Show "Ask to Unmute" button if user is not yet allowed ---
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onRequestUnmute(peerId)}
+              >
+                <Mic className="w-4 h-4 text-primary" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Ask to Unmute</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+  };
 
   return (
     <div className="w-80 h-full bg-card border-l flex flex-col">
@@ -56,8 +110,9 @@ export default function ParticipantList({
           </div>
           {Object.entries(peerDisplayNames).map(([peerId, displayName]) => {
             const status = peerMuteStatus[peerId];
+            if (!status) return null;
             const isPersonallyMuted =
-              localPeerId && status?.personallyMutedBy.includes(localPeerId);
+              localPeerId && status.personallyMutedBy.includes(localPeerId);
             return (
               <div key={peerId} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -70,10 +125,10 @@ export default function ParticipantList({
                   )}
                 </div>
                 <div className="flex items-center gap-1">
+                  <HostControl peerId={peerId} />
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        {/* --- FIX: Call the prop function directly --- */}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -89,8 +144,8 @@ export default function ParticipantList({
                       <TooltipContent>
                         <p>
                           {isPersonallyMuted
-                            ? "Unmute this participant"
-                            : "Mute this participant"}
+                            ? "Unmute for yourself"
+                            : "Mute for yourself"}
                         </p>
                       </TooltipContent>
                     </Tooltip>

@@ -1,8 +1,6 @@
-//src/components/pages/call/CallControls.tsx
-
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Mic,
@@ -16,6 +14,7 @@ import {
   Users,
 } from "lucide-react";
 
+// --- FIX: Add isMicDisabled to the props interface ---
 interface CallControlsProps {
   onLeave: () => void;
   localStream: MediaStream;
@@ -23,6 +22,7 @@ interface CallControlsProps {
   isScreenSharing: boolean;
   onToggleChat: () => void;
   onToggleParticipants: () => void;
+  isMicDisabled: boolean;
 }
 
 export default function CallControls({
@@ -32,6 +32,7 @@ export default function CallControls({
   isScreenSharing,
   onToggleChat,
   onToggleParticipants,
+  isMicDisabled,
 }: CallControlsProps) {
   const [isMicMuted, setIsMicMuted] = useState(
     !localStream.getAudioTracks()[0]?.enabled
@@ -40,11 +41,18 @@ export default function CallControls({
     !localStream.getVideoTracks()[0]?.enabled
   );
 
+  useEffect(() => {
+    const audioTrack = localStream.getAudioTracks()[0];
+    if (!audioTrack) return;
+    const syncState = () => setIsMicMuted(!audioTrack.enabled);
+    const intervalId = setInterval(syncState, 200);
+    return () => clearInterval(intervalId);
+  }, [localStream]);
+
   const toggleMic = () => {
     const audioTrack = localStream.getAudioTracks()[0];
     if (audioTrack) {
       audioTrack.enabled = !audioTrack.enabled;
-      setIsMicMuted(!audioTrack.enabled);
     }
   };
 
@@ -52,18 +60,19 @@ export default function CallControls({
     const videoTrack = localStream.getVideoTracks()[0];
     if (videoTrack) {
       videoTrack.enabled = !videoTrack.enabled;
-      setIsCameraOff(!videoTrack.enabled);
     }
   };
 
   return (
     <div className="flex justify-center items-center p-4 bg-card/50 rounded-lg border">
       <div className="flex gap-4">
+        {/* --- FIX: Add the 'disabled' attribute to the button --- */}
         <Button
           onClick={toggleMic}
           variant="secondary"
           size="lg"
           className="rounded-full w-16 h-16"
+          disabled={isMicDisabled}
         >
           {isMicMuted ? <MicOff /> : <Mic />}
         </Button>

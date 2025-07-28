@@ -10,6 +10,9 @@ const initialState: WebRTCState = {
   remoteStreams: {},
   peerDisplayNames: {},
   peerMuteStatus: {},
+  unmuteRequestReceived: false,
+  isRoomMutedByHost: false,
+  allowedToSpeak: [],
 };
 
 const webrtcSlice = createSlice({
@@ -45,10 +48,6 @@ const webrtcSlice = createSlice({
     },
     removePeer: (state, action: PayloadAction<string>) => {
       const peerId = action.payload;
-      const stream = state.remoteStreams[peerId];
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
       delete state.remoteStreams[peerId];
       delete state.peerDisplayNames[peerId];
       delete state.peerMuteStatus[peerId];
@@ -74,7 +73,6 @@ const webrtcSlice = createSlice({
         }
       }
     },
-    // --- FIX: Added reducer to handle incoming mute events from other peers ---
     updatePeerPersonalMute: (state, action: PayloadAction<PeerMutePayload>) => {
       const { mutedPeerId, muterPeerId, isMuted } = action.payload;
       const status = state.peerMuteStatus[mutedPeerId];
@@ -88,9 +86,29 @@ const webrtcSlice = createSlice({
       }
     },
     setAllPeersMutedByHost: (state, action: PayloadAction<boolean>) => {
+      const isMuted = action.payload;
+      state.isRoomMutedByHost = isMuted;
       for (const peerId in state.peerMuteStatus) {
-        state.peerMuteStatus[peerId].isMutedByHost = action.payload;
+        if (peerId !== state.hostId) {
+          state.peerMuteStatus[peerId].isMutedByHost = isMuted;
+        }
       }
+      if (!isMuted) {
+        state.allowedToSpeak = [];
+      }
+    },
+    setUnmuteRequest: (state, action: PayloadAction<boolean>) => {
+      state.unmuteRequestReceived = action.payload;
+    },
+    addAllowedSpeaker: (state, action: PayloadAction<string>) => {
+      if (!state.allowedToSpeak.includes(action.payload)) {
+        state.allowedToSpeak.push(action.payload);
+      }
+    },
+    removeAllowedSpeaker: (state, action: PayloadAction<string>) => {
+      state.allowedToSpeak = state.allowedToSpeak.filter(
+        (id) => id !== action.payload
+      );
     },
   },
 });
@@ -107,6 +125,9 @@ export const {
   togglePersonalMute,
   updatePeerPersonalMute,
   setAllPeersMutedByHost,
+  setUnmuteRequest,
+  addAllowedSpeaker,
+  removeAllowedSpeaker,
 } = webrtcSlice.actions;
 
 export default webrtcSlice.reducer;

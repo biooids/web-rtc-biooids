@@ -1,7 +1,12 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useAppDispatch, useAppSelector } from "./hooks";
 import { WebRTCService } from "../features/webrtc/WebRTCService";
-import { callEnded } from "../features/webrtc/webrtcSlice";
+import {
+  callEnded,
+  setUnmuteRequest,
+  addAllowedSpeaker,
+  removeAllowedSpeaker,
+} from "../features/webrtc/webrtcSlice";
 import { clearChat } from "../features/chat/chatSlice";
 
 export const useWebRTC = (
@@ -24,6 +29,35 @@ export const useWebRTC = (
     };
   }, [roomId, displayName, localStream, dispatch]);
 
+  const requestUnmute = useCallback(
+    (targetId: string) => {
+      webrtcServiceRef.current?.requestUnmute(targetId);
+      dispatch(addAllowedSpeaker(targetId));
+    },
+    [dispatch]
+  );
+
+  const forceMuteUser = useCallback(
+    (targetId: string) => {
+      webrtcServiceRef.current?.forceMute(targetId);
+      dispatch(removeAllowedSpeaker(targetId));
+    },
+    [dispatch]
+  );
+
+  const declineUnmuteRequest = useCallback(() => {
+    dispatch(setUnmuteRequest(false));
+    if (webrtcState.hostId) {
+      webrtcServiceRef.current?.declineUnmuteRequest(webrtcState.hostId);
+    }
+  }, [dispatch, webrtcState.hostId]);
+
+  const acceptUnmuteRequest = useCallback(() => {
+    webrtcServiceRef.current?.sendAcceptedUnmuteRequest();
+    dispatch(addAllowedSpeaker(webrtcState.myId!));
+    dispatch(setUnmuteRequest(false));
+  }, [dispatch, webrtcState.myId]);
+
   const leaveCall = useCallback(() => webrtcServiceRef.current?.hangUp(), []);
   const replaceTrack = useCallback(async (track: MediaStreamTrack) => {
     await webrtcServiceRef.current?.replaceTrack(track);
@@ -37,8 +71,6 @@ export const useWebRTC = (
   const toggleMuteAll = useCallback((isMuted: boolean) => {
     webrtcServiceRef.current?.toggleMuteAll(isMuted);
   }, []);
-
-  // --- FIX: Expose the service method to the UI ---
   const togglePersonalMute = useCallback((peerId: string) => {
     webrtcServiceRef.current?.togglePersonalMute(peerId);
   }, []);
@@ -51,5 +83,9 @@ export const useWebRTC = (
     sendReaction,
     toggleMuteAll,
     togglePersonalMute,
+    requestUnmute,
+    declineUnmuteRequest,
+    forceMuteUser,
+    acceptUnmuteRequest,
   };
 };

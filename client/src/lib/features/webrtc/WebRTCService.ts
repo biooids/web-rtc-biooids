@@ -10,9 +10,12 @@ import {
   setMyId,
   togglePersonalMute,
   updatePeerPersonalMute,
+  setUnmuteRequest,
+  removeAllowedSpeaker,
+  addAllowedSpeaker,
 } from "./webrtcSlice";
 import { addMessage, ChatMessage } from "../chat/chatSlice";
-import { showReaction } from "../reactions/reactionsSlice"; // --- FIX: Import the new thunk ---
+import { showReaction } from "../reactions/reactionsSlice";
 
 const STUN_SERVERS = {
   iceServers: [
@@ -56,6 +59,10 @@ export class WebRTCService {
         this.dispatch(setIsHost(this.myId === message.payload.hostId));
         this.dispatch(setHostId(message.payload.hostId));
         this.dispatch(setAllPeersMutedByHost(message.payload.isRoomMuted));
+        if (message.payload.isRoomMuted) {
+          const audioTrack = this.localStream?.getAudioTracks()[0];
+          if (audioTrack) audioTrack.enabled = false;
+        }
         message.payload.peers.forEach((peer: any) => {
           this.dispatch(
             addPeer({ peerId: peer.id, displayName: peer.displayName })
@@ -78,12 +85,19 @@ export class WebRTCService {
         this.closePeerConnection(message.payload.peerId);
         break;
       case "personal-mute-toggle":
-        if (message.senderId !== this.myId) {
+        if (message.senderId !== this.myId)
           this.dispatch(updatePeerPersonalMute(message.payload));
-        }
         break;
       case "all-peers-muted-state-changed":
-        this.dispatch(setAllPeersMutedByHost(message.payload.isMuted));
+        const isMuted = message.payload.isMuted;
+        this.dispatch(setAllPeersMutedByHost(isMuted));
+        if (isMuted) {
+          const amIHost = store.getState().webrtc.isHost;
+          if (!amIHost) {
+            const audioTrack = this.localStream?.getAudioTracks()[0];
+            if (audioTrack) audioTrack.enabled = false;
+          }
+        }
         break;
       case "chat-message":
         const chatMessage = {
@@ -93,8 +107,6 @@ export class WebRTCService {
         };
         this.dispatch(addMessage(chatMessage as ChatMessage));
         break;
-
-      // --- FIX: Dispatch the showReaction thunk when a reaction is received ---
       case "reaction":
         this.dispatch(
           showReaction({
@@ -103,10 +115,18 @@ export class WebRTCService {
           })
         );
         break;
-
-      case "request-mute-peer":
-        const track = this.localStream?.getAudioTracks()[0];
-        if (track) track.enabled = false;
+      case "request-unmute":
+        this.dispatch(setUnmuteRequest(true));
+        break;
+      case "force-mute":
+        const audioTrack = this.localStream?.getAudioTracks()[0];
+        if (audioTrack) audioTrack.enabled = false;
+        break;
+      case "decline-unmute":
+        this.dispatch(removeAllowedSpeaker(message.senderId));
+        break;
+      case "accepted-unmute-request":
+        this.dispatch(addAllowedSpeaker(message.senderId));
         break;
       case "offer":
         this.handleOffer(message.senderId, message.payload.sdp);
@@ -120,11 +140,26 @@ export class WebRTCService {
     }
   }
 
-  public sendReaction(emoji: string) {
-    this.sendBroadcastMessage({ type: "reaction", payload: { emoji } });
+  public requestUnmute(targetId: string) {
+    this.sendMessage({
+      type: "request-unmute",
+      targetId: targetId,
+      payload: {},
+    });
   }
 
-  // --- Other methods remain unchanged ---
+  public forceMute(targetId: string) {
+    this.sendMessage({ type: "force-mute", targetId: targetId, payload: {} });
+  }
+
+  public declineUnmuteRequest(hostId: string) {
+    this.sendMessage({ type: "decline-unmute", targetId: hostId, payload: {} });
+  }
+
+  public sendAcceptedUnmuteRequest() {
+    this.sendBroadcastMessage({ type: "accepted-unmute-request", payload: {} });
+  }
+
   public togglePersonalMute(peerIdToMute: string) {
     if (!this.myId) return;
     const webrtcState = store.getState().webrtc;
@@ -159,12 +194,8 @@ export class WebRTCService {
       payload: { text, timestamp: new Date().toISOString() },
     });
   }
-  public requestMutePeer(peerId: string) {
-    this.sendMessage({
-      type: "request-mute-peer",
-      targetId: peerId,
-      payload: {},
-    });
+  public sendReaction(emoji: string) {
+    this.sendBroadcastMessage({ type: "reaction", payload: { emoji } });
   }
   public toggleMuteAll(isMuted: boolean) {
     this.sendBroadcastMessage({

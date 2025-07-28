@@ -4,7 +4,7 @@ import React, { useRef, useEffect, useState, useMemo } from "react";
 import { useAppSelector } from "@/lib/hooks/hooks";
 import { Card } from "@/components/ui/card";
 import { Reaction } from "@/lib/features/reactions/reactionsSlice";
-import "./ReactionAnimation.css"; // Make sure you have this CSS file for the animation
+import "./ReactionAnimation.css";
 import { MicOff } from "lucide-react";
 
 interface VideoPlayerProps {
@@ -14,7 +14,6 @@ interface VideoPlayerProps {
   localPeerId: string | null;
 }
 
-// --- FIX: This is the component that will render the animated emoji ---
 const ReactionBubble = ({ reaction }: { reaction: Reaction }) => (
   <div key={reaction.id} className="reaction-bubble">
     {reaction.emoji}
@@ -28,13 +27,22 @@ export default function VideoPlayer({
   localPeerId,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { peerMuteStatus, peerDisplayNames } = useAppSelector(
-    (state) => state.webrtc
-  );
-  // --- FIX: Select the reaction state for this specific peer ---
-  const reaction = useAppSelector(
+  // --- FIX: Get the global room mute status and host status ---
+  const {
+    peerMuteStatus,
+    peerDisplayNames,
+    isRoomMutedByHost,
+    isHost,
+    allowedToSpeak,
+  } = useAppSelector((state) => state.webrtc);
+
+  const reactionForPeer = useAppSelector(
     (state) => state.reactions.latestReactions[peerId]
   );
+  const reactionForLocal = useAppSelector(
+    (state) => state.reactions.latestReactions[localPeerId || ""]
+  );
+  const reaction = peerId === "local" ? reactionForLocal : reactionForPeer;
 
   const [isRemoteTrackMuted, setIsRemoteTrackMuted] = useState(false);
 
@@ -56,19 +64,18 @@ export default function VideoPlayer({
     if (audioTrack) {
       const updateMuteState = () => setIsRemoteTrackMuted(!audioTrack.enabled);
       updateMuteState();
-      audioTrack.addEventListener("mute", updateMuteState);
-      audioTrack.addEventListener("unmute", updateMuteState);
-      return () => {
-        audioTrack.removeEventListener("mute", updateMuteState);
-        audioTrack.removeEventListener("unmute", updateMuteState);
-      };
+      const interval = setInterval(updateMuteState, 500);
+      return () => clearInterval(interval);
     }
   }, [stream]);
 
   const muteReasons = useMemo(() => {
     if (!muteStatus || isLocal) return [];
     const reasons: string[] = [];
-    if (muteStatus.isMutedByHost || isRemoteTrackMuted) {
+    const isAllowed = allowedToSpeak.includes(peerId);
+
+    // Only show "Muted by host" if they are not specifically allowed to speak
+    if ((muteStatus.isMutedByHost || isRemoteTrackMuted) && !isAllowed) {
       reasons.push("Muted by host");
     }
     muteStatus.personallyMutedBy.forEach((muterId) => {
@@ -79,7 +86,15 @@ export default function VideoPlayer({
       }
     });
     return [...new Set(reasons)];
-  }, [muteStatus, isRemoteTrackMuted, localPeerId, peerDisplayNames, isLocal]);
+  }, [
+    muteStatus,
+    isRemoteTrackMuted,
+    localPeerId,
+    peerDisplayNames,
+    isLocal,
+    allowedToSpeak,
+    peerId,
+  ]);
 
   return (
     <Card className="overflow-hidden aspect-video relative bg-muted">
@@ -90,11 +105,20 @@ export default function VideoPlayer({
         muted={isLocal}
         className="w-full h-full object-cover scale-x-[-1]"
       />
-
-      {/* --- FIX: Conditionally render the reaction bubble on this video card --- */}
       {reaction && <ReactionBubble reaction={reaction} />}
 
-      {(muteStatus?.isMutedByHost || isRemoteTrackMuted) && !isLocal && (
+      {/* --- FIX: New logic to show an overlay on YOUR screen when muted by host --- */}
+      {isLocal && isRoomMutedByHost && !isHost && (
+        <div className="absolute inset-0 bg-black/50 flex items-center justify-center p-4 text-center">
+          <div className="flex items-center gap-2 text-white text-sm">
+            <MicOff className="w-5 h-5" />
+            You are muted by the host
+          </div>
+        </div>
+      )}
+
+      {/* This overlay is for remote peers */}
+      {muteReasons.length > 0 && !isLocal && (
         <div className="absolute top-2 right-2 p-2 rounded-full bg-black/50">
           <MicOff className="w-5 h-5 text-white" />
         </div>

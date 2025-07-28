@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useMemo, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useMemo,
+  useRef,
+  useCallback,
+  useEffect,
+} from "react";
 import { useWebRTC } from "@/lib/hooks/useWebRTC";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks/hooks";
 import { toggleChat } from "@/lib/features/chat/chatSlice";
@@ -8,8 +14,18 @@ import VideoPlayer from "./VideoPlayer";
 import CallControls from "./CallControls";
 import ChatPanel from "./ChatPanel";
 import ParticipantList from "./ParticipantList";
-import { Loader2, Grid, UserSquare, PanelLeft, Hand } from "lucide-react"; // Added Hand icon
+import { Loader2, Grid, UserSquare, PanelLeft, Hand } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface CallRoomProps {
   roomId: string;
@@ -24,6 +40,7 @@ export default function CallRoom({
   localStream,
   onLeave,
 }: CallRoomProps) {
+  // --- FIX: Destructure the new acceptUnmuteRequest function ---
   const {
     myId,
     remoteStreams,
@@ -38,6 +55,12 @@ export default function CallRoom({
     sendReaction,
     toggleMuteAll,
     togglePersonalMute,
+    unmuteRequestReceived,
+    requestUnmute,
+    declineUnmuteRequest,
+    isRoomMutedByHost,
+    forceMuteUser,
+    acceptUnmuteRequest,
   } = useWebRTC(roomId, displayName, localStream);
 
   const dispatch = useAppDispatch();
@@ -55,6 +78,21 @@ export default function CallRoom({
       (status) => status.isMutedByHost
     );
   }, [peerMuteStatus]);
+
+  const isMicDisabled = isRoomMutedByHost && !isHost;
+
+  const handleAcceptUnmuteRequest = () => {
+    const audioTrack = localStream.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = true;
+    }
+    // --- FIX: Call the function from the hook to close the dialog ---
+    acceptUnmuteRequest();
+  };
+
+  const handleDeclineUnmuteRequest = () => {
+    declineUnmuteRequest();
+  };
 
   const handleLeave = () => {
     leaveCall();
@@ -133,7 +171,6 @@ export default function CallRoom({
     );
   }
 
-  // This sub-component handles sending the reaction. Its logic is correct.
   const ReactionButton = ({
     emoji,
     children,
@@ -153,6 +190,25 @@ export default function CallRoom({
 
   return (
     <div className="flex h-full min-h-[85vh]">
+      <AlertDialog open={unmuteRequestReceived}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Request to Unmute</AlertDialogTitle>
+            <AlertDialogDescription>
+              The host would like you to unmute your microphone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleDeclineUnmuteRequest}>
+              Dismiss
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleAcceptUnmuteRequest}>
+              Unmute
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="flex flex-col flex-1 relative">
         <div className="absolute top-4 left-4 z-10">
           <div className="flex gap-2 p-2 bg-card/75 backdrop-blur-sm rounded-md">
@@ -230,8 +286,8 @@ export default function CallRoom({
                   <div
                     className={`flex gap-4 ${
                       layout === "featured"
-                        ? "justify-center overflow-x-auto"
-                        : "flex-col w-48 overflow-y-auto"
+                        ? "justify-center overflow-x-auto p-2"
+                        : "flex-col w-48 overflow-y-auto p-1"
                     }`}
                   >
                     {otherStreams.map(({ stream, peerId, displayName }) => (
@@ -266,6 +322,7 @@ export default function CallRoom({
             isScreenSharing={isScreenSharing}
             onToggleChat={handleToggleChat}
             onToggleParticipants={handleToggleParticipants}
+            isMicDisabled={isMicDisabled}
           />
         </div>
       </div>
@@ -279,6 +336,8 @@ export default function CallRoom({
           onToggleMuteAll={() => toggleMuteAll(!areAllMuted)}
           areAllMuted={areAllMuted}
           onTogglePersonalMute={togglePersonalMute}
+          onRequestUnmute={requestUnmute}
+          onForceMute={forceMuteUser}
         />
       )}
     </div>
